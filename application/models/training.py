@@ -113,6 +113,12 @@ class TrainingJob(BaseModel):
     final_loss: Optional[float] = Field(default=None, description="最终损失")
     training_time: Optional[float] = Field(default=None, description="训练时间(秒)")
     checkpoint_path: Optional[str] = Field(default=None, description="检查点路径")
+    
+    # 导出相关
+    export_completed: bool = Field(default=False, description="导出是否完成")
+    export_time: Optional[float] = Field(default=None, description="导出时间(秒)")
+    export_path: Optional[str] = Field(default=None, description="导出模型路径")
+    export_error: Optional[str] = Field(default=None, description="导出错误信息")
 
 
 class TrainingJobResponse(BaseModel):
@@ -151,4 +157,10 @@ class TrainingStatusResponse(BaseModel):
     estimated_time_remaining: Optional[float] = Field(default=None, description="预计剩余时间(秒)")
     created_at: datetime = Field(..., description="创建时间")
     started_at: Optional[datetime] = Field(default=None, description="开始时间")
-    completed_at: Optional[datetime] = Field(default=None, description="完成时间") 
+    completed_at: Optional[datetime] = Field(default=None, description="完成时间")
+    
+    # 导出信息
+    export_completed: Optional[bool] = Field(default=None, description="导出是否完成")
+    export_time: Optional[float] = Field(default=None, description="导出时间(秒)")
+    export_path: Optional[str] = Field(default=None, description="导出模型路径")
+    export_error: Optional[str] = Field(default=None, description="导出错误信息") 

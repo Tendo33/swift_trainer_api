@@ -205,6 +205,42 @@ class TrainingService:
             self.logger.error(f"停止训练任务失败: {str(e)}")
             return False
     
+    def export_model(self, job_id: str) -> bool:
+        """手动触发模型导出和合并"""
+        try:
+            job = self.redis_service.get_training_job(job_id)
+            if job is None:
+                raise ValueError(f"训练任务 {job_id} 不存在")
+            
+            if job.status != TrainingStatus.COMPLETED:
+                raise ValueError(f"只有已完成的训练任务才能导出模型，当前状态: {job.status}")
+            
+            if job.export_completed:
+                raise ValueError(f"训练任务 {job_id} 已经完成导出")
+            
+            # 创建训练日志记录器
+            training_logger = get_training_logger(job_id)
+            
+            # 在后台线程中执行导出
+            export_thread = threading.Thread(
+                target=self._export_and_merge_model,
+                args=(job_id, job, training_logger)
+            )
+            export_thread.daemon = True
+            export_thread.start()
+            
+            # 添加导出开始事件
+            self.redis_service.add_training_event(
+                job_id, "export_started", "手动触发模型导出和合并"
+            )
+            
+            self.logger.info(f"开始手动导出模型: {job_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"开始模型导出失败: {str(e)}")
+            return False
+    
     def get_training_status(self, job_id: str) -> Optional[Dict[str, Any]]:
         """获取训练状态"""
         try:
@@ -239,7 +275,12 @@ class TrainingService:
                 'estimated_time_remaining': progress_data.get('estimated_time_remaining'),
                 'created_at': job.created_at,
                 'started_at': job.started_at,
-                'completed_at': job.completed_at
+                'completed_at': job.completed_at,
+                # 导出信息
+                'export_completed': job.export_completed,
+                'export_time': job.export_time,
+                'export_path': job.export_path,
+                'export_error': job.export_error
             }
             
             return status_data
@@ -327,6 +368,9 @@ class TrainingService:
                     job.status = TrainingStatus.COMPLETED
                     job.training_time = training_time
                     training_logger.training_completed(0.0, training_time)  # 这里需要从日志中提取最终损失
+                    
+                    # 训练完成后自动执行模型导出和合并
+                    self._export_and_merge_model(job_id, job, training_logger)
                 else:
                     job.status = TrainingStatus.FAILED
                     job.error_message = f"训练进程返回错误代码: {return_code}"
@@ -358,6 +402,15 @@ class TrainingService:
                 job.status = TrainingStatus.FAILED
                 job.error_message = str(e)
                 self.redis_service.save_training_job(job)
+                # 确保释放GPU资源
+                gpu_ids = job.gpu_id.split(',')
+                for gpu_id in gpu_ids:
+                    self.gpu_manager.release_gpu(gpu_id.strip())
+                # 清理进程记录
+                if job_id in self.active_processes:
+                    del self.active_processes[job_id]
+                # 添加失败事件
+                self.redis_service.add_training_event(job_id, "training_failed", f"监控失败: {str(e)}")
     
     def _parse_training_progress(self, job_id: str, line: str, training_logger):
         """解析训练进度"""
@@ -392,6 +445,108 @@ class TrainingService:
             
         except Exception as e:
             self.logger.error(f"解析训练进度失败: {str(e)}")
+
+    def _export_and_merge_model(self, job_id: str, job: TrainingJob, training_logger):
+        """训练完成后自动导出和合并模型"""
+        try:
+            training_logger.info(f"开始执行模型导出和合并操作: {job_id}")
+            self.redis_service.add_training_event(job_id, "export_started", "开始模型导出和合并")
+            
+            # 查找最新的检查点目录
+            checkpoint_dir = self._find_latest_checkpoint(job.output_dir)
+            if not checkpoint_dir:
+                raise ValueError(f"未找到检查点目录: {job.output_dir}")
+            
+            training_logger.info(f"找到检查点目录: {checkpoint_dir}")
+            
+            # 构建导出命令
+            export_command = self._build_export_command(job.gpu_id, checkpoint_dir)
+            
+            # 设置环境变量
+            env = self._build_environment(job)
+            
+            # 执行导出命令
+            training_logger.info(f"执行导出命令: {' '.join(export_command)}")
+            
+            export_process = subprocess.Popen(
+                export_command,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1
+            )
+            
+            # 监控导出进程
+            export_start_time = time.time()
+            for line in iter(export_process.stdout.readline, ''):
+                if line:
+                    line = line.strip()
+                    training_logger.info(f"导出输出: {line}")
+            
+            # 等待导出进程结束
+            export_return_code = export_process.wait()
+            export_time = time.time() - export_start_time
+            
+            if export_return_code == 0:
+                training_logger.info(f"模型导出和合并成功完成，耗时: {export_time:.2f}秒")
+                self.redis_service.add_training_event(
+                    job_id, "export_completed", 
+                    f"模型导出和合并成功完成，耗时: {export_time:.2f}秒"
+                )
+                
+                # 更新任务状态，添加导出完成信息
+                job.export_completed = True
+                job.export_time = export_time
+                self.redis_service.save_training_job(job)
+            else:
+                error_msg = f"模型导出失败，返回代码: {export_return_code}"
+                training_logger.error(error_msg)
+                self.redis_service.add_training_event(job_id, "export_failed", error_msg)
+                raise RuntimeError(error_msg)
+                
+        except Exception as e:
+            error_msg = f"模型导出和合并失败: {str(e)}"
+            training_logger.error(error_msg)
+            self.redis_service.add_training_event(job_id, "export_failed", error_msg)
+            # 不抛出异常，避免影响训练完成状态
+
+    def _find_latest_checkpoint(self, output_dir: str) -> Optional[str]:
+        """查找最新的检查点目录"""
+        try:
+            if not os.path.exists(output_dir):
+                return None
+            
+            # 查找checkpoint-*目录
+            checkpoint_dirs = []
+            for item in os.listdir(output_dir):
+                item_path = os.path.join(output_dir, item)
+                if os.path.isdir(item_path) and item.startswith('checkpoint-'):
+                    checkpoint_dirs.append(item_path)
+            
+            if not checkpoint_dirs:
+                return None
+            
+            # 按目录名排序，获取最新的检查点
+            checkpoint_dirs.sort(key=lambda x: int(x.split('-')[-1]))
+            return checkpoint_dirs[-1]
+            
+        except Exception as e:
+            self.logger.error(f"查找检查点目录失败: {str(e)}")
+            return None
+
+    def _build_export_command(self, gpu_id: str, checkpoint_dir: str) -> List[str]:
+        """构建模型导出命令"""
+        # 使用第一个GPU进行导出
+        primary_gpu = gpu_id.split(',')[0].strip()
+        
+        command = [
+            "swift", "export",
+            "--adapters", checkpoint_dir,
+            "--merge_lora", "true"
+        ]
+        
+        return command
 
 
 # 创建全局训练服务实例

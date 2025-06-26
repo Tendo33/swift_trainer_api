@@ -1,5 +1,8 @@
 from typing import Optional
 
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
+
 from application.models.training import (
     TrainingJob,
     TrainingJobCreateRequest,
@@ -11,8 +14,6 @@ from application.services.redis_service import get_redis_service
 from application.services.training_service import get_training_service
 from application.utils.gpu_utils import get_gpu_manager
 from application.utils.logger import get_system_logger
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
 
 logger = get_system_logger()
 router = APIRouter(prefix="/training", tags=["训练任务管理"])
@@ -86,6 +87,30 @@ async def stop_training_job(job_id: str):
     except Exception as e:
         logger.error(f"停止训练任务失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"停止训练任务失败: {str(e)}")
+
+
+@router.post("/jobs/{job_id}/export", response_model=TrainingJobResponse, summary="手动触发模型导出")
+async def export_training_model(job_id: str):
+    """手动触发指定训练任务的模型导出和合并"""
+    try:
+        training_service = get_training_service()
+        success = training_service.export_model(job_id)
+        
+        if success:
+            logger.info(f"开始导出训练模型: {job_id}")
+            return TrainingJobResponse(
+                job_id=job_id,
+                status="exporting",
+                message="模型导出已开始"
+            )
+        else:
+            raise HTTPException(status_code=500, detail="开始模型导出失败")
+    except ValueError as e:
+        logger.warning(f"导出模型参数错误: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"导出模型失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"导出模型失败: {str(e)}")
 
 
 @router.get("/jobs/{job_id}/status", response_model=TrainingStatusResponse, summary="获取训练状态")
