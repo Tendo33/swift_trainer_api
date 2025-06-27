@@ -79,31 +79,40 @@ class TrainingJobCreateRequest(BaseModel):
 class LLMTrainingJobCreateRequest(BaseModel):
     """创建LLM训练任务请求模型"""
     gpu_id: str = Field(..., description="GPU ID，如 '0' 或 '0,1,2'")
-    datasets: List[str] = Field(..., description="数据集列表")
-    model_path: str = Field(..., description="模型路径")
     output_dir: str = Field(..., description="输出目录")
     
-    # 训练参数
-    num_epochs: int = Field(default=1, description="训练轮数")
-    batch_size: int = Field(default=1, description="批次大小")
-    learning_rate: float = Field(default=1e-4, description="学习率")
-    lora_rank: int = Field(default=8, description="LoRA rank")
-    lora_alpha: int = Field(default=32, description="LoRA alpha")
-    target_modules: str = Field(default="all-linear", description="目标模块")
-    gradient_accumulation_steps: int = Field(default=16, description="梯度累积步数")
-    eval_steps: int = Field(default=50, description="评估步数")
-    save_steps: int = Field(default=50, description="保存步数")
-    save_total_limit: int = Field(default=2, description="保存总数限制")
-    logging_steps: int = Field(default=5, description="日志步数")
-    max_length: int = Field(default=2048, description="最大长度")
-    warmup_ratio: float = Field(default=0.05, description="预热比例")
-    dataloader_num_workers: int = Field(default=4, description="数据加载器工作进程数")
-    torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
+    # 固定参数 - 用户不可修改
+    model_path: str = Field(default="Qwen/Qwen2.5-7B-Instruct", description="模型路径（固定）")
+    datasets: List[str] = Field(
+        default=[
+            "AI-ModelScope/alpaca-gpt4-data-zh#500",
+            "AI-ModelScope/alpaca-gpt4-data-en#500",
+            "swift/self-cognition#500"
+        ],
+        description="数据集列表（固定）"
+    )
     
-    # LLM特有参数
-    system: str = Field(default="You are a helpful assistant.", description="系统提示")
-    model_author: str = Field(default="swift", description="模型作者")
-    model_name: str = Field(default="swift-robot", description="模型名称")
+    # 固定训练参数
+    num_epochs: int = Field(default=1, description="训练轮数（固定）")
+    batch_size: int = Field(default=1, description="批次大小（固定）")
+    learning_rate: float = Field(default=1e-4, description="学习率（固定）")
+    lora_rank: int = Field(default=8, description="LoRA rank（固定）")
+    lora_alpha: int = Field(default=32, description="LoRA alpha（固定）")
+    target_modules: str = Field(default="all-linear", description="目标模块（固定）")
+    gradient_accumulation_steps: int = Field(default=16, description="梯度累积步数（固定）")
+    eval_steps: int = Field(default=50, description="评估步数（固定）")
+    save_steps: int = Field(default=50, description="保存步数（固定）")
+    save_total_limit: int = Field(default=2, description="保存总数限制（固定）")
+    logging_steps: int = Field(default=5, description="日志步数（固定）")
+    max_length: int = Field(default=2048, description="最大长度（固定）")
+    warmup_ratio: float = Field(default=0.05, description="预热比例（固定）")
+    dataloader_num_workers: int = Field(default=4, description="数据加载器工作进程数（固定）")
+    torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型（固定）")
+    
+    # 固定LLM参数
+    system: str = Field(default="You are a helpful assistant.", description="系统提示（固定）")
+    model_author: str = Field(default="swift", description="模型作者（固定）")
+    model_name: str = Field(default="swift-robot", description="模型名称（固定）")
     
     @field_validator('gpu_id')
     def validate_gpu_id(cls, v):
@@ -115,13 +124,6 @@ class LLMTrainingJobCreateRequest(BaseModel):
         for gpu_id in gpu_ids:
             if not gpu_id.strip().isdigit():
                 raise ValueError(f"无效的GPU ID: {gpu_id}")
-        return v
-    
-    @field_validator('datasets')
-    def validate_datasets(cls, v):
-        """验证数据集列表"""
-        if not v:
-            raise ValueError("数据集列表不能为空")
         return v
 
 

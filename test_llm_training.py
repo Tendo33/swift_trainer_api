@@ -55,6 +55,10 @@ def test_create_llm_job() -> str:
             print(f"✅ LLM训练任务创建成功: {job_id}")
             print(f"   状态: {result['status']}")
             print(f"   消息: {result['message']}")
+            print("   使用固定参数:")
+            print("   - 模型: Qwen/Qwen2.5-7B-Instruct")
+            print("   - 数据集: AI-ModelScope/alpaca-gpt4-data-zh#500, AI-ModelScope/alpaca-gpt4-data-en#500, swift/self-cognition#500")
+            print("   - 训练参数: 1 epoch, batch_size=1, lr=1e-4, lora_rank=8, lora_alpha=32")
             return job_id
         else:
             print(f"❌ LLM训练任务创建失败: {response.status_code}")

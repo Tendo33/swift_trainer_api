@@ -58,31 +58,31 @@ class TrainingService:
                 if not self.gpu_manager.check_gpu_availability(gpu_id.strip()):
                     raise ValueError(f"GPU {gpu_id} 不可用")
             
-            # 创建LLM训练任务
+            # 创建LLM训练任务 - 使用固定的参数
             job = LLMTrainingJob(
                 gpu_id=request.gpu_id,
-                datasets=request.datasets,
-                model_path=request.model_path,
+                datasets=request.datasets,  # 使用固定的数据集
+                model_path=request.model_path,  # 使用固定的模型路径
                 output_dir=request.output_dir or settings.OUTPUT_DIR,
-                # 使用请求中的参数或默认值
-                num_epochs=request.num_epochs,
-                batch_size=request.batch_size,
-                learning_rate=request.learning_rate,
-                lora_rank=request.lora_rank,
-                lora_alpha=request.lora_alpha,
-                target_modules=request.target_modules,
-                gradient_accumulation_steps=request.gradient_accumulation_steps,
-                eval_steps=request.eval_steps,
-                save_steps=request.save_steps,
-                save_total_limit=request.save_total_limit,
-                logging_steps=request.logging_steps,
-                max_length=request.max_length,
-                warmup_ratio=request.warmup_ratio,
-                dataloader_num_workers=request.dataloader_num_workers,
-                torch_dtype=request.torch_dtype,
-                system=request.system,
-                model_author=request.model_author,
-                model_name=request.model_name
+                # 使用固定的训练参数
+                num_epochs=1,
+                batch_size=1,
+                learning_rate=1e-4,
+                lora_rank=8,
+                lora_alpha=32,
+                target_modules="all-linear",
+                gradient_accumulation_steps=16,
+                eval_steps=50,
+                save_steps=50,
+                save_total_limit=2,
+                logging_steps=5,
+                max_length=2048,
+                warmup_ratio=0.05,
+                dataloader_num_workers=4,
+                torch_dtype="bfloat16",
+                system="You are a helpful assistant.",
+                model_author="swift",
+                model_name="swift-robot"
             )
             
             # 保存到Redis

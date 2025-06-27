@@ -6,11 +6,42 @@
 - **VLM训练**：多模态视觉语言模型训练
 - **LLM训练**：大语言模型训练
 
-本文档主要介绍LLM训练功能的使用方法。
+**重要说明**：LLM训练使用固定的参数配置，用户只需要指定GPU ID和输出目录，其他参数都是预设的固定值。
+
+## LLM训练固定配置
+
+LLM训练使用以下固定配置：
+
+### 固定模型和数据集
+- **模型**: `Qwen/Qwen2.5-7B-Instruct`
+- **数据集**: 
+  - `AI-ModelScope/alpaca-gpt4-data-zh#500`
+  - `AI-ModelScope/alpaca-gpt4-data-en#500`
+  - `swift/self-cognition#500`
+
+### 固定训练参数
+- **训练轮数**: 1 epoch
+- **批次大小**: 1
+- **学习率**: 1e-4
+- **LoRA rank**: 8
+- **LoRA alpha**: 32
+- **目标模块**: all-linear
+- **梯度累积步数**: 16
+- **评估步数**: 50
+- **保存步数**: 50
+- **保存总数限制**: 2
+- **日志步数**: 5
+- **最大长度**: 2048
+- **预热比例**: 0.05
+- **数据加载器工作进程数**: 4
+- **PyTorch数据类型**: bfloat16
+- **系统提示**: "You are a helpful assistant."
+- **模型作者**: swift
+- **模型名称**: swift-robot
 
 ## LLM训练命令示例
 
-LLM训练使用以下Swift命令格式：
+LLM训练使用以下Swift命令格式（固定参数）：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
@@ -34,7 +65,7 @@ swift sft \
     --save_total_limit 2 \
     --logging_steps 5 \
     --max_length 2048 \
-    --output_dir output \
+    --output_dir {output_dir} \
     --system 'You are a helpful assistant.' \
     --warmup_ratio 0.05 \
     --dataloader_num_workers 4 \
@@ -48,35 +79,11 @@ swift sft \
 
 **接口**: `POST /training/llm/jobs`
 
-**请求体**:
+**请求体** (只需要提供必要参数):
 ```json
 {
     "gpu_id": "0",
-    "datasets": [
-        "AI-ModelScope/alpaca-gpt4-data-zh#500",
-        "AI-ModelScope/alpaca-gpt4-data-en#500",
-        "swift/self-cognition#500"
-    ],
-    "model_path": "Qwen/Qwen2.5-7B-Instruct",
-    "output_dir": "output/llm_test",
-    "num_epochs": 1,
-    "batch_size": 1,
-    "learning_rate": 1e-4,
-    "lora_rank": 8,
-    "lora_alpha": 32,
-    "target_modules": "all-linear",
-    "gradient_accumulation_steps": 16,
-    "eval_steps": 50,
-    "save_steps": 50,
-    "save_total_limit": 2,
-    "logging_steps": 5,
-    "max_length": 2048,
-    "warmup_ratio": 0.05,
-    "dataloader_num_workers": 4,
-    "torch_dtype": "bfloat16",
-    "system": "You are a helpful assistant.",
-    "model_author": "swift",
-    "model_name": "swift-robot"
+    "output_dir": "output/llm_test"
 }
 ```
 
@@ -88,6 +95,8 @@ swift sft \
     "message": "LLM训练任务创建成功"
 }
 ```
+
+**注意**: 所有其他参数都使用固定值，用户无需指定。
 
 ### 2. 启动LLM训练任务
 
@@ -121,7 +130,11 @@ swift sft \
             "created_at": "2024-01-01T00:00:00",
             "gpu_id": "0",
             "model_path": "Qwen/Qwen2.5-7B-Instruct",
-            "datasets": ["dataset1", "dataset2"],
+            "datasets": [
+                "AI-ModelScope/alpaca-gpt4-data-zh#500",
+                "AI-ModelScope/alpaca-gpt4-data-en#500",
+                "swift/self-cognition#500"
+            ],
             "output_dir": "output/llm_test"
         }
     ],
@@ -214,35 +227,12 @@ swift sft \
 ```python
 import requests
 
-# 创建LLM训练任务
+# 创建LLM训练任务 - 只需要提供GPU ID和输出目录
 def create_llm_job():
     url = "http://localhost:8000/training/llm/jobs"
     data = {
         "gpu_id": "0",
-        "datasets": [
-            "AI-ModelScope/alpaca-gpt4-data-zh#500",
-            "AI-ModelScope/alpaca-gpt4-data-en#500"
-        ],
-        "model_path": "Qwen/Qwen2.5-7B-Instruct",
-        "output_dir": "output/llm_test",
-        "num_epochs": 1,
-        "batch_size": 1,
-        "learning_rate": 1e-4,
-        "lora_rank": 8,
-        "lora_alpha": 32,
-        "target_modules": "all-linear",
-        "gradient_accumulation_steps": 16,
-        "eval_steps": 50,
-        "save_steps": 50,
-        "save_total_limit": 2,
-        "logging_steps": 5,
-        "max_length": 2048,
-        "warmup_ratio": 0.05,
-        "dataloader_num_workers": 4,
-        "torch_dtype": "bfloat16",
-        "system": "You are a helpful assistant.",
-        "model_author": "swift",
-        "model_name": "swift-robot"
+        "output_dir": "output/llm_test"
     }
     
     response = requests.post(url, json=data)
@@ -262,7 +252,7 @@ def get_status(job_id):
 
 # 使用示例
 if __name__ == "__main__":
-    # 创建任务
+    # 创建任务 - 非常简单，只需要两个参数
     result = create_llm_job()
     job_id = result["job_id"]
     print(f"创建任务: {job_id}")
@@ -279,32 +269,12 @@ if __name__ == "__main__":
 ### cURL示例
 
 ```bash
-# 创建LLM训练任务
+# 创建LLM训练任务 - 非常简单
 curl -X POST "http://localhost:8000/training/llm/jobs" \
   -H "Content-Type: application/json" \
   -d '{
     "gpu_id": "0",
-    "datasets": ["AI-ModelScope/alpaca-gpt4-data-zh#500"],
-    "model_path": "Qwen/Qwen2.5-7B-Instruct",
-    "output_dir": "output/llm_test",
-    "num_epochs": 1,
-    "batch_size": 1,
-    "learning_rate": 1e-4,
-    "lora_rank": 8,
-    "lora_alpha": 32,
-    "target_modules": "all-linear",
-    "gradient_accumulation_steps": 16,
-    "eval_steps": 50,
-    "save_steps": 50,
-    "save_total_limit": 2,
-    "logging_steps": 5,
-    "max_length": 2048,
-    "warmup_ratio": 0.05,
-    "dataloader_num_workers": 4,
-    "torch_dtype": "bfloat16",
-    "system": "You are a helpful assistant.",
-    "model_author": "swift",
-    "model_name": "swift-robot"
+    "output_dir": "output/llm_test"
   }'
 
 # 启动训练
@@ -331,19 +301,19 @@ python test_llm_training.py
 
 ## 注意事项
 
-1. **GPU资源管理**: 确保指定的GPU ID可用且未被其他任务占用
-2. **数据集格式**: 数据集需要符合Swift框架的要求格式
-3. **模型路径**: 确保模型路径正确且可访问
+1. **简化使用**: LLM训练现在只需要指定GPU ID和输出目录，其他参数都是固定的
+2. **固定配置**: 所有训练参数都是经过优化的固定值，确保训练效果
+3. **GPU资源管理**: 确保指定的GPU ID可用且未被其他任务占用
 4. **输出目录**: 确保输出目录有写入权限
-5. **训练参数**: 根据硬件配置调整batch_size、gradient_accumulation_steps等参数
+5. **模型和数据集**: 使用固定的模型和数据集，确保兼容性
 
 ## 故障排除
 
 ### 常见问题
 
 1. **GPU不可用**: 检查GPU ID是否正确，GPU是否被其他进程占用
-2. **数据集加载失败**: 检查数据集路径和格式是否正确
-3. **内存不足**: 减小batch_size或gradient_accumulation_steps
+2. **输出目录权限**: 确保输出目录有写入权限
+3. **内存不足**: 如果GPU内存不足，可能需要使用更小的GPU或等待其他任务完成
 4. **训练中断**: 检查日志文件，查看具体错误信息
 
 ### 日志查看
@@ -358,4 +328,11 @@ python test_llm_training.py
 - 训练进度
 - GPU使用情况
 - 损失值变化
-- 预计完成时间 
+- 预计完成时间
+
+## 优势
+
+1. **简化操作**: 用户只需要提供最基本的参数
+2. **标准化**: 所有LLM训练使用相同的配置，确保一致性
+3. **减少错误**: 避免用户配置错误导致的训练失败
+4. **快速启动**: 无需复杂的参数配置，快速开始训练 
