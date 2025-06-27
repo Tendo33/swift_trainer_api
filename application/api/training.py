@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from application.models.training import (
-    LLMTrainingJobCreateRequest,
     TrainingJobCreateRequest,
     TrainingJobListResponse,
     TrainingJobResponse,
@@ -19,48 +18,27 @@ logger = get_system_logger()
 router = APIRouter(prefix="/training", tags=["训练任务管理"])
 
 
-@router.post("/jobs", response_model=TrainingJobResponse, summary="创建VLM训练任务")
+@router.post("/jobs", response_model=TrainingJobResponse, summary="创建训练任务")
 async def create_training_job(request: TrainingJobCreateRequest):
-    """创建新的Swift VLM训练任务"""
+    """创建新的Swift训练任务（支持VLM和LLM）"""
     try:
         training_service = get_training_service()
         job = training_service.create_training_job(request)
         
-        logger.info(f"创建VLM训练任务成功: {job.id}")
+        training_type = "VLM" if request.training_type.value == "vlm" else "LLM"
+        logger.info(f"创建{training_type}训练任务成功: {job.id}")
         
         return TrainingJobResponse(
             job_id=job.id,
             status=job.status,
-            message="VLM训练任务创建成功"
+            message=f"{training_type}训练任务创建成功"
         )
     except ValueError as e:
-        logger.warning(f"创建VLM训练任务参数错误: {str(e)}")
+        logger.warning(f"创建训练任务参数错误: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"创建VLM训练任务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建VLM训练任务失败: {str(e)}")
-
-
-@router.post("/llm/jobs", response_model=TrainingJobResponse, summary="创建LLM训练任务")
-async def create_llm_training_job(request: LLMTrainingJobCreateRequest):
-    """创建新的Swift LLM训练任务"""
-    try:
-        training_service = get_training_service()
-        job = training_service.create_llm_training_job(request)
-        
-        logger.info(f"创建LLM训练任务成功: {job.id}")
-        
-        return TrainingJobResponse(
-            job_id=job.id,
-            status=job.status,
-            message="LLM训练任务创建成功"
-        )
-    except ValueError as e:
-        logger.warning(f"创建LLM训练任务参数错误: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"创建LLM训练任务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建LLM训练任务失败: {str(e)}")
+        logger.error(f"创建训练任务失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建训练任务失败: {str(e)}")
 
 
 @router.post("/jobs/{job_id}/start", response_model=TrainingJobResponse, summary="启动训练任务")
@@ -153,13 +131,13 @@ async def get_training_status(job_id: str):
         raise HTTPException(status_code=500, detail=f"获取训练状态失败: {str(e)}")
 
 
-@router.get("/jobs", response_model=TrainingJobListResponse, summary="获取VLM训练任务列表")
+@router.get("/jobs", response_model=TrainingJobListResponse, summary="获取训练任务列表")
 async def get_training_jobs(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(10, ge=1, le=100, description="每页大小"),
     status: Optional[str] = Query(None, description="任务状态过滤")
 ):
-    """获取VLM训练任务列表，支持分页和状态过滤"""
+    """获取训练任务列表，支持分页和状态过滤"""
     try:
         redis_service = get_redis_service()
         
@@ -172,7 +150,7 @@ async def get_training_jobs(
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"无效的状态值: {status}")
         else:
-            # 获取所有VLM任务
+            # 获取所有训练任务
             jobs = redis_service.get_all_training_jobs()
         
         # 分页处理
@@ -190,49 +168,8 @@ async def get_training_jobs(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取VLM训练任务列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取VLM训练任务列表失败: {str(e)}")
-
-
-@router.get("/llm/jobs", response_model=TrainingJobListResponse, summary="获取LLM训练任务列表")
-async def get_llm_training_jobs(
-    page: int = Query(1, ge=1, description="页码"),
-    size: int = Query(10, ge=1, le=100, description="每页大小"),
-    status: Optional[str] = Query(None, description="任务状态过滤")
-):
-    """获取LLM训练任务列表，支持分页和状态过滤"""
-    try:
-        redis_service = get_redis_service()
-        
-        if status:
-            # 根据状态过滤
-            from application.models.training import TrainingStatus
-            try:
-                status_enum = TrainingStatus(status)
-                jobs = redis_service.get_llm_jobs_by_status(status_enum)
-            except ValueError:
-                raise HTTPException(status_code=400, detail=f"无效的状态值: {status}")
-        else:
-            # 获取所有LLM任务
-            jobs = redis_service.get_all_llm_training_jobs()
-        
-        # 分页处理
-        total = len(jobs)
-        start_idx = (page - 1) * size
-        end_idx = start_idx + size
-        paginated_jobs = jobs[start_idx:end_idx]
-        
-        return TrainingJobListResponse(
-            jobs=paginated_jobs,
-            total=total,
-            page=page,
-            size=size
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"获取LLM训练任务列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取LLM训练任务列表失败: {str(e)}")
+        logger.error(f"获取训练任务列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取训练任务列表失败: {str(e)}")
 
 
 @router.get("/all/jobs", summary="获取所有训练任务列表")
@@ -246,47 +183,39 @@ async def get_all_training_jobs(
         redis_service = get_redis_service()
         
         # 获取所有任务
-        all_jobs_data = redis_service.get_all_jobs()
-        vlm_jobs = all_jobs_data['vlm_jobs']
-        llm_jobs = all_jobs_data['llm_jobs']
-        
-        # 合并任务列表
-        all_jobs = []
-        for job in vlm_jobs:
-            job_dict = job.model_dump()
-            job_dict['training_type'] = 'vlm'
-            all_jobs.append(job_dict)
-        
-        for job in llm_jobs:
-            job_dict = job.model_dump()
-            job_dict['training_type'] = 'llm'
-            all_jobs.append(job_dict)
-        
-        # 按创建时间排序
-        all_jobs.sort(key=lambda x: x['created_at'], reverse=True)
-        
-        # 状态过滤
         if status:
+            # 根据状态过滤
             from application.models.training import TrainingStatus
             try:
                 status_enum = TrainingStatus(status)
-                all_jobs = [job for job in all_jobs if job['status'] == status_enum]
+                all_jobs = redis_service.get_jobs_by_status(status_enum)
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"无效的状态值: {status}")
+        else:
+            all_jobs = redis_service.get_all_training_jobs()
+        
+        # 转换为字典格式，添加训练类型标识
+        jobs_with_type = []
+        for job in all_jobs:
+            job_dict = job.model_dump()
+            # 根据任务类型添加标识
+            if hasattr(job, 'datasets'):  # LLM任务有datasets字段
+                job_dict['training_type'] = 'llm'
+            else:  # VLM任务有data_path字段
+                job_dict['training_type'] = 'vlm'
+            jobs_with_type.append(job_dict)
         
         # 分页处理
-        total = len(all_jobs)
+        total = len(jobs_with_type)
         start_idx = (page - 1) * size
         end_idx = start_idx + size
-        paginated_jobs = all_jobs[start_idx:end_idx]
+        paginated_jobs = jobs_with_type[start_idx:end_idx]
         
         return {
             "jobs": paginated_jobs,
             "total": total,
             "page": page,
-            "size": size,
-            "total_vlm": all_jobs_data['total_vlm'],
-            "total_llm": all_jobs_data['total_llm']
+            "size": size
         }
     except HTTPException:
         raise
@@ -301,18 +230,15 @@ async def get_training_job(job_id: str):
     try:
         redis_service = get_redis_service()
         
-        # 尝试获取VLM训练任务
+        # 尝试获取训练任务
         job = redis_service.get_training_job(job_id)
         if job:
             job_dict = job.model_dump()
-            job_dict['training_type'] = 'vlm'
-            return job_dict
-        
-        # 尝试获取LLM训练任务
-        llm_job = redis_service.get_llm_training_job(job_id)
-        if llm_job:
-            job_dict = llm_job.model_dump()
-            job_dict['training_type'] = 'llm'
+            # 根据任务类型添加标识
+            if hasattr(job, 'datasets'):  # LLM任务有datasets字段
+                job_dict['training_type'] = 'llm'
+            else:  # VLM任务有data_path字段
+                job_dict['training_type'] = 'vlm'
             return job_dict
         
         raise HTTPException(status_code=404, detail="训练任务不存在")
@@ -329,7 +255,7 @@ async def delete_training_job(job_id: str):
     try:
         redis_service = get_redis_service()
         
-        # 检查VLM任务是否存在
+        # 检查VLM训练任务是否存在
         job = redis_service.get_training_job(job_id)
         if job:
             if job.status in ["running", "pending"]:
@@ -337,16 +263,16 @@ async def delete_training_job(job_id: str):
             
             success = redis_service.delete_training_job(job_id)
             if success:
-                logger.info(f"删除VLM训练任务成功: {job_id}")
+                logger.info(f"删除训练任务成功: {job_id}")
                 return TrainingJobResponse(
                     job_id=job_id,
                     status="deleted",
-                    message="VLM训练任务删除成功"
+                    message="训练任务删除成功"
                 )
             else:
-                raise HTTPException(status_code=500, detail="删除VLM训练任务失败")
+                raise HTTPException(status_code=500, detail="删除训练任务失败")
         
-        # 检查LLM任务是否存在
+        # 检查LLM训练任务是否存在
         llm_job = redis_service.get_llm_training_job(job_id)
         if llm_job:
             if llm_job.status in ["running", "pending"]:

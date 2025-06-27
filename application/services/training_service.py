@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 from application.config import settings
 from application.models.training import (
     LLMTrainingJob,
-    LLMTrainingJobCreateRequest,
     TrainingJob,
     TrainingJobCreateRequest,
     TrainingStatus,
@@ -30,7 +29,7 @@ class TrainingService:
         self.logger = logger
         self.active_processes: Dict[str, subprocess.Popen] = {}
     
-    def create_training_job(self, request: TrainingJobCreateRequest) -> TrainingJob:
+    def create_training_job(self, request: TrainingJobCreateRequest) -> TrainingJob | LLMTrainingJob:
         """创建训练任务"""
         try:
             # 验证GPU可用性
@@ -41,7 +40,7 @@ class TrainingService:
             
             # 根据训练类型创建不同的任务
             if request.training_type == TrainingType.LLM:
-                return self._create_llm_training_job(request)
+                return self._create_llm_training_job_from_request(request)
             else:
                 return self._create_vlm_training_job(request)
             
@@ -49,56 +48,49 @@ class TrainingService:
             self.logger.error(f"创建训练任务失败: {str(e)}")
             raise
     
-    def create_llm_training_job(self, request: LLMTrainingJobCreateRequest) -> LLMTrainingJob:
-        """创建LLM训练任务"""
-        try:
-            # 验证GPU可用性
-            gpu_ids = request.gpu_id.split(',')
-            for gpu_id in gpu_ids:
-                if not self.gpu_manager.check_gpu_availability(gpu_id.strip()):
-                    raise ValueError(f"GPU {gpu_id} 不可用")
-            
-            # 创建LLM训练任务 - 使用固定的参数
-            job = LLMTrainingJob(
-                gpu_id=request.gpu_id,
-                datasets=request.datasets,  # 使用固定的数据集
-                model_path=request.model_path,  # 使用固定的模型路径
-                output_dir=request.output_dir or settings.OUTPUT_DIR,
-                # 使用固定的训练参数
-                num_epochs=1,
-                batch_size=1,
-                learning_rate=1e-4,
-                lora_rank=8,
-                lora_alpha=32,
-                target_modules="all-linear",
-                gradient_accumulation_steps=16,
-                eval_steps=50,
-                save_steps=50,
-                save_total_limit=2,
-                logging_steps=5,
-                max_length=2048,
-                warmup_ratio=0.05,
-                dataloader_num_workers=4,
-                torch_dtype="bfloat16",
-                system="You are a helpful assistant.",
-                model_author="swift",
-                model_name="swift-robot"
-            )
-            
-            # 保存到Redis
-            self.redis_service.save_llm_training_job(job)
-            
-            # 添加创建事件
-            self.redis_service.add_training_event(
-                job.id, "job_created", f"LLM训练任务 {job.id} 已创建"
-            )
-            
-            self.logger.info(f"创建LLM训练任务 {job.id}")
-            return job
-            
-        except Exception as e:
-            self.logger.error(f"创建LLM训练任务失败: {str(e)}")
-            raise
+    def _create_llm_training_job_from_request(self, request: TrainingJobCreateRequest) -> LLMTrainingJob:
+        """从通用请求创建LLM训练任务"""
+        # 创建LLM训练任务 - 使用固定的参数
+        job = LLMTrainingJob(
+            gpu_id=request.gpu_id,
+            datasets=[
+                "AI-ModelScope/alpaca-gpt4-data-zh#500",
+                "AI-ModelScope/alpaca-gpt4-data-en#500",
+                "swift/self-cognition#500"
+            ],  # 使用固定的数据集
+            model_path="Qwen/Qwen2.5-7B-Instruct",  # 使用固定的模型路径
+            output_dir=request.output_dir or settings.OUTPUT_DIR,
+            # 使用固定的训练参数
+            num_epochs=1,
+            batch_size=1,
+            learning_rate=1e-4,
+            lora_rank=8,
+            lora_alpha=32,
+            target_modules="all-linear",
+            gradient_accumulation_steps=16,
+            eval_steps=50,
+            save_steps=50,
+            save_total_limit=2,
+            logging_steps=5,
+            max_length=2048,
+            warmup_ratio=0.05,
+            dataloader_num_workers=4,
+            torch_dtype="bfloat16",
+            system="You are a helpful assistant.",
+            model_author="swift",
+            model_name="swift-robot"
+        )
+        
+        # 保存到Redis
+        self.redis_service.save_llm_training_job(job)
+        
+        # 添加创建事件
+        self.redis_service.add_training_event(
+            job.id, "job_created", f"LLM训练任务 {job.id} 已创建"
+        )
+        
+        self.logger.info(f"创建LLM训练任务 {job.id}")
+        return job
     
     def _create_vlm_training_job(self, request: TrainingJobCreateRequest) -> TrainingJob:
         """创建VLM训练任务"""
@@ -143,12 +135,6 @@ class TrainingService:
         
         self.logger.info(f"创建VLM训练任务 {job.id}")
         return job
-    
-    def _create_llm_training_job(self, request: TrainingJobCreateRequest) -> TrainingJob:
-        """从通用请求创建LLM训练任务"""
-        # 这里需要将通用请求转换为LLM请求
-        # 由于通用请求可能不包含datasets字段，我们需要特殊处理
-        raise ValueError("请使用专门的LLM训练接口 create_llm_training_job")
     
     def start_training(self, job_id: str) -> bool:
         """启动训练任务"""

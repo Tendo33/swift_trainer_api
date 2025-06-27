@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     API_PREFIX: str = Field(default="/api/v1", env="API_PREFIX")
     APP_HOST: str = Field(default="0.0.0.0", env="APP_HOST")
     APP_PORT: int = Field(default=8000, env="APP_PORT")
+    DEBUG: bool = Field(default=True, env="DEBUG")
     
     # 训练配置
     OUTPUT_DIR: str = Field(default="output", env="OUTPUT_DIR")

@@ -140,7 +140,27 @@ class RedisService:
             self.logger.error(f"删除LLM训练任务失败: {str(e)}")
             return False
     
-    def get_all_training_jobs(self) -> List[TrainingJob]:
+    def get_all_training_jobs(self) -> List[TrainingJob | LLMTrainingJob]:
+        """获取所有训练任务（VLM和LLM）"""
+        try:
+            vlm_jobs = self._get_all_vlm_training_jobs()
+            llm_jobs = self._get_all_llm_training_jobs()
+            
+            # 合并任务列表
+            all_jobs = []
+            for job in vlm_jobs:
+                all_jobs.append(job)
+            for job in llm_jobs:
+                all_jobs.append(job)
+            
+            # 按创建时间排序
+            all_jobs.sort(key=lambda x: x.created_at, reverse=True)
+            return all_jobs
+        except Exception as e:
+            self.logger.error(f"获取所有训练任务失败: {str(e)}")
+            return []
+    
+    def _get_all_vlm_training_jobs(self) -> List[TrainingJob]:
         """获取所有VLM训练任务"""
         try:
             pattern = "training_job:*"
@@ -160,7 +180,7 @@ class RedisService:
             self.logger.error(f"获取所有VLM训练任务失败: {str(e)}")
             return []
     
-    def get_all_llm_training_jobs(self) -> List[LLMTrainingJob]:
+    def _get_all_llm_training_jobs(self) -> List[LLMTrainingJob]:
         """获取所有LLM训练任务"""
         try:
             pattern = "llm_training_job:*"
@@ -180,38 +200,13 @@ class RedisService:
             self.logger.error(f"获取所有LLM训练任务失败: {str(e)}")
             return []
     
-    def get_all_jobs(self) -> Dict[str, List]:
-        """获取所有训练任务（VLM和LLM）"""
-        try:
-            vlm_jobs = self.get_all_training_jobs()
-            llm_jobs = self.get_all_llm_training_jobs()
-            
-            return {
-                'vlm_jobs': vlm_jobs,
-                'llm_jobs': llm_jobs,
-                'total_vlm': len(vlm_jobs),
-                'total_llm': len(llm_jobs)
-            }
-        except Exception as e:
-            self.logger.error(f"获取所有训练任务失败: {str(e)}")
-            return {'vlm_jobs': [], 'llm_jobs': [], 'total_vlm': 0, 'total_llm': 0}
-    
-    def get_jobs_by_status(self, status: TrainingStatus) -> List[TrainingJob]:
-        """根据状态获取VLM训练任务"""
+    def get_jobs_by_status(self, status: TrainingStatus) -> List[TrainingJob | LLMTrainingJob]:
+        """根据状态获取训练任务（VLM和LLM）"""
         try:
             all_jobs = self.get_all_training_jobs()
             return [job for job in all_jobs if job.status == status]
         except Exception as e:
-            self.logger.error(f"根据状态获取VLM训练任务失败: {str(e)}")
-            return []
-    
-    def get_llm_jobs_by_status(self, status: TrainingStatus) -> List[LLMTrainingJob]:
-        """根据状态获取LLM训练任务"""
-        try:
-            all_jobs = self.get_all_llm_training_jobs()
-            return [job for job in all_jobs if job.status == status]
-        except Exception as e:
-            self.logger.error(f"根据状态获取LLM训练任务失败: {str(e)}")
+            self.logger.error(f"根据状态获取训练任务失败: {str(e)}")
             return []
     
     def save_training_log(self, job_id: str, log_entry: Dict[str, Any]) -> bool:

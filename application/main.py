@@ -1,14 +1,15 @@
 import os
 from contextlib import asynccontextmanager
 
-from application.api.training import router as training_router
-from application.config import settings
-from application.utils.logger import get_system_logger
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from application.api.training import router as training_router
+from application.config import settings
+from application.utils.logger import get_system_logger
 
 logger = get_system_logger()
 
@@ -163,6 +164,6 @@ if __name__ == "__main__":
         "application.main:app",
         host=settings.APP_HOST,
         port=settings.APP_PORT,
-        reload=True,
+        reload=True if settings.DEBUG else False,
         log_level=settings.LOG_LEVEL.lower()
     ) 
