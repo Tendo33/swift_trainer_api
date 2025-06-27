@@ -15,12 +15,19 @@ class TrainingStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class TrainingType(str, Enum):
+    """训练类型枚举"""
+    VLM = "vlm"  # 多模态视觉语言模型
+    LLM = "llm"  # 大语言模型
+
+
 class TrainingJobCreateRequest(BaseModel):
     """创建训练任务请求模型"""
     gpu_id: str = Field(..., description="GPU ID，如 '0' 或 '0,1,2'")
     data_path: str = Field(..., description="数据集路径")
     model_path: str = Field(..., description="模型路径")
     output_dir: str = Field(..., description="输出目录")
+    training_type: TrainingType = Field(default=TrainingType.VLM, description="训练类型")
     
     # 可选参数，使用默认值
     num_epochs: int = Field(default=1, description="训练轮数")
@@ -50,6 +57,12 @@ class TrainingJobCreateRequest(BaseModel):
     )
     torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
     
+    # LLM训练特有参数
+    target_modules: str = Field(default="all-linear", description="目标模块")
+    system: str = Field(default="You are a helpful assistant.", description="系统提示")
+    model_author: str = Field(default="swift", description="模型作者")
+    model_name: str = Field(default="swift-robot", description="模型名称")
+    
     @field_validator('gpu_id')
     def validate_gpu_id(cls, v):
         """验证GPU ID格式"""
@@ -63,6 +76,55 @@ class TrainingJobCreateRequest(BaseModel):
         return v
 
 
+class LLMTrainingJobCreateRequest(BaseModel):
+    """创建LLM训练任务请求模型"""
+    gpu_id: str = Field(..., description="GPU ID，如 '0' 或 '0,1,2'")
+    datasets: List[str] = Field(..., description="数据集列表")
+    model_path: str = Field(..., description="模型路径")
+    output_dir: str = Field(..., description="输出目录")
+    
+    # 训练参数
+    num_epochs: int = Field(default=1, description="训练轮数")
+    batch_size: int = Field(default=1, description="批次大小")
+    learning_rate: float = Field(default=1e-4, description="学习率")
+    lora_rank: int = Field(default=8, description="LoRA rank")
+    lora_alpha: int = Field(default=32, description="LoRA alpha")
+    target_modules: str = Field(default="all-linear", description="目标模块")
+    gradient_accumulation_steps: int = Field(default=16, description="梯度累积步数")
+    eval_steps: int = Field(default=50, description="评估步数")
+    save_steps: int = Field(default=50, description="保存步数")
+    save_total_limit: int = Field(default=2, description="保存总数限制")
+    logging_steps: int = Field(default=5, description="日志步数")
+    max_length: int = Field(default=2048, description="最大长度")
+    warmup_ratio: float = Field(default=0.05, description="预热比例")
+    dataloader_num_workers: int = Field(default=4, description="数据加载器工作进程数")
+    torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
+    
+    # LLM特有参数
+    system: str = Field(default="You are a helpful assistant.", description="系统提示")
+    model_author: str = Field(default="swift", description="模型作者")
+    model_name: str = Field(default="swift-robot", description="模型名称")
+    
+    @field_validator('gpu_id')
+    def validate_gpu_id(cls, v):
+        """验证GPU ID格式"""
+        if not v:
+            raise ValueError("GPU ID不能为空")
+        # 检查是否为有效的GPU ID格式（数字，用逗号分隔）
+        gpu_ids = v.split(',')
+        for gpu_id in gpu_ids:
+            if not gpu_id.strip().isdigit():
+                raise ValueError(f"无效的GPU ID: {gpu_id}")
+        return v
+    
+    @field_validator('datasets')
+    def validate_datasets(cls, v):
+        """验证数据集列表"""
+        if not v:
+            raise ValueError("数据集列表不能为空")
+        return v
+
+
 class TrainingJob(BaseModel):
     """训练任务模型"""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="任务ID")
@@ -70,6 +132,9 @@ class TrainingJob(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
     started_at: Optional[datetime] = Field(default=None, description="开始时间")
     completed_at: Optional[datetime] = Field(default=None, description="完成时间")
+    
+    # 训练类型
+    training_type: TrainingType = Field(default=TrainingType.VLM, description="训练类型")
     
     # 训练参数
     gpu_id: str = Field(..., description="GPU ID")
@@ -102,6 +167,66 @@ class TrainingJob(BaseModel):
         description="外部插件路径"
     )
     torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
+    
+    # LLM训练特有参数
+    target_modules: str = Field(default="all-linear", description="目标模块")
+    system: str = Field(default="You are a helpful assistant.", description="系统提示")
+    model_author: str = Field(default="swift", description="模型作者")
+    model_name: str = Field(default="swift-robot", description="模型名称")
+    
+    # 运行时信息
+    process_id: Optional[int] = Field(default=None, description="进程ID")
+    log_file_path: Optional[str] = Field(default=None, description="日志文件路径")
+    error_message: Optional[str] = Field(default=None, description="错误信息")
+    progress: float = Field(default=0.0, description="训练进度 (0-100)")
+    
+    # 训练结果
+    final_loss: Optional[float] = Field(default=None, description="最终损失")
+    training_time: Optional[float] = Field(default=None, description="训练时间(秒)")
+    checkpoint_path: Optional[str] = Field(default=None, description="检查点路径")
+    
+    # 导出相关
+    export_completed: bool = Field(default=False, description="导出是否完成")
+    export_time: Optional[float] = Field(default=None, description="导出时间(秒)")
+    export_path: Optional[str] = Field(default=None, description="导出模型路径")
+    export_error: Optional[str] = Field(default=None, description="导出错误信息")
+
+
+class LLMTrainingJob(BaseModel):
+    """LLM训练任务模型"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="任务ID")
+    status: TrainingStatus = Field(default=TrainingStatus.PENDING, description="任务状态")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
+    started_at: Optional[datetime] = Field(default=None, description="开始时间")
+    completed_at: Optional[datetime] = Field(default=None, description="完成时间")
+    
+    # 训练参数
+    gpu_id: str = Field(..., description="GPU ID")
+    datasets: List[str] = Field(..., description="数据集列表")
+    model_path: str = Field(..., description="模型路径")
+    output_dir: str = Field(..., description="输出目录")
+    
+    # 训练配置
+    num_epochs: int = Field(default=1, description="训练轮数")
+    batch_size: int = Field(default=1, description="批次大小")
+    learning_rate: float = Field(default=1e-4, description="学习率")
+    lora_rank: int = Field(default=8, description="LoRA rank")
+    lora_alpha: int = Field(default=32, description="LoRA alpha")
+    target_modules: str = Field(default="all-linear", description="目标模块")
+    gradient_accumulation_steps: int = Field(default=16, description="梯度累积步数")
+    eval_steps: int = Field(default=50, description="评估步数")
+    save_steps: int = Field(default=50, description="保存步数")
+    save_total_limit: int = Field(default=2, description="保存总数限制")
+    logging_steps: int = Field(default=5, description="日志步数")
+    max_length: int = Field(default=2048, description="最大长度")
+    warmup_ratio: float = Field(default=0.05, description="预热比例")
+    dataloader_num_workers: int = Field(default=4, description="数据加载器工作进程数")
+    torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
+    
+    # LLM特有参数
+    system: str = Field(default="You are a helpful assistant.", description="系统提示")
+    model_author: str = Field(default="swift", description="模型作者")
+    model_name: str = Field(default="swift-robot", description="模型名称")
     
     # 运行时信息
     process_id: Optional[int] = Field(default=None, description="进程ID")

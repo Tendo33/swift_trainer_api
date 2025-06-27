@@ -3,8 +3,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import redis
+
 from application.config import settings
-from application.models.training import TrainingJob, TrainingStatus
+from application.models.training import LLMTrainingJob, TrainingJob, TrainingStatus
 from application.utils.logger import get_system_logger
 
 logger = get_system_logger()
@@ -34,19 +35,31 @@ class RedisService:
             return False
     
     def save_training_job(self, job: TrainingJob) -> bool:
-        """保存训练任务到Redis"""
+        """保存VLM训练任务到Redis"""
         try:
             job_data = job.model_dump_json()
             key = f"training_job:{job.id}"
             self.redis_client.setex(key, 86400 * 7, job_data)  # 保存7天
-            self.logger.info(f"保存训练任务 {job.id} 到Redis")
+            self.logger.info(f"保存VLM训练任务 {job.id} 到Redis")
             return True
         except Exception as e:
-            self.logger.error(f"保存训练任务失败: {str(e)}")
+            self.logger.error(f"保存VLM训练任务失败: {str(e)}")
+            return False
+    
+    def save_llm_training_job(self, job: LLMTrainingJob) -> bool:
+        """保存LLM训练任务到Redis"""
+        try:
+            job_data = job.model_dump_json()
+            key = f"llm_training_job:{job.id}"
+            self.redis_client.setex(key, 86400 * 7, job_data)  # 保存7天
+            self.logger.info(f"保存LLM训练任务 {job.id} 到Redis")
+            return True
+        except Exception as e:
+            self.logger.error(f"保存LLM训练任务失败: {str(e)}")
             return False
     
     def get_training_job(self, job_id: str) -> Optional[TrainingJob]:
-        """从Redis获取训练任务"""
+        """从Redis获取VLM训练任务"""
         try:
             key = f"training_job:{job_id}"
             job_data = self.redis_client.get(key)
@@ -54,11 +67,23 @@ class RedisService:
                 return TrainingJob.model_validate_json(job_data)
             return None
         except Exception as e:
-            self.logger.error(f"获取训练任务失败: {str(e)}")
+            self.logger.error(f"获取VLM训练任务失败: {str(e)}")
+            return None
+    
+    def get_llm_training_job(self, job_id: str) -> Optional[LLMTrainingJob]:
+        """从Redis获取LLM训练任务"""
+        try:
+            key = f"llm_training_job:{job_id}"
+            job_data = self.redis_client.get(key)
+            if job_data:
+                return LLMTrainingJob.model_validate_json(job_data)
+            return None
+        except Exception as e:
+            self.logger.error(f"获取LLM训练任务失败: {str(e)}")
             return None
     
     def update_training_job(self, job_id: str, **kwargs) -> bool:
-        """更新训练任务"""
+        """更新VLM训练任务"""
         try:
             job = self.get_training_job(job_id)
             if job is None:
@@ -72,22 +97,51 @@ class RedisService:
             # 保存更新后的任务
             return self.save_training_job(job)
         except Exception as e:
-            self.logger.error(f"更新训练任务失败: {str(e)}")
+            self.logger.error(f"更新VLM训练任务失败: {str(e)}")
+            return False
+    
+    def update_llm_training_job(self, job_id: str, **kwargs) -> bool:
+        """更新LLM训练任务"""
+        try:
+            job = self.get_llm_training_job(job_id)
+            if job is None:
+                return False
+            
+            # 更新字段
+            for key, value in kwargs.items():
+                if hasattr(job, key):
+                    setattr(job, key, value)
+            
+            # 保存更新后的任务
+            return self.save_llm_training_job(job)
+        except Exception as e:
+            self.logger.error(f"更新LLM训练任务失败: {str(e)}")
             return False
     
     def delete_training_job(self, job_id: str) -> bool:
-        """删除训练任务"""
+        """删除VLM训练任务"""
         try:
             key = f"training_job:{job_id}"
             result = self.redis_client.delete(key)
-            self.logger.info(f"删除训练任务 {job_id}")
+            self.logger.info(f"删除VLM训练任务 {job_id}")
             return result > 0
         except Exception as e:
-            self.logger.error(f"删除训练任务失败: {str(e)}")
+            self.logger.error(f"删除VLM训练任务失败: {str(e)}")
+            return False
+    
+    def delete_llm_training_job(self, job_id: str) -> bool:
+        """删除LLM训练任务"""
+        try:
+            key = f"llm_training_job:{job_id}"
+            result = self.redis_client.delete(key)
+            self.logger.info(f"删除LLM训练任务 {job_id}")
+            return result > 0
+        except Exception as e:
+            self.logger.error(f"删除LLM训练任务失败: {str(e)}")
             return False
     
     def get_all_training_jobs(self) -> List[TrainingJob]:
-        """获取所有训练任务"""
+        """获取所有VLM训练任务"""
         try:
             pattern = "training_job:*"
             keys = self.redis_client.keys(pattern)
@@ -103,16 +157,61 @@ class RedisService:
             jobs.sort(key=lambda x: x.created_at, reverse=True)
             return jobs
         except Exception as e:
-            self.logger.error(f"获取所有训练任务失败: {str(e)}")
+            self.logger.error(f"获取所有VLM训练任务失败: {str(e)}")
             return []
     
+    def get_all_llm_training_jobs(self) -> List[LLMTrainingJob]:
+        """获取所有LLM训练任务"""
+        try:
+            pattern = "llm_training_job:*"
+            keys = self.redis_client.keys(pattern)
+            jobs = []
+            
+            for key in keys:
+                job_data = self.redis_client.get(key)
+                if job_data:
+                    job = LLMTrainingJob.model_validate_json(job_data)
+                    jobs.append(job)
+            
+            # 按创建时间排序
+            jobs.sort(key=lambda x: x.created_at, reverse=True)
+            return jobs
+        except Exception as e:
+            self.logger.error(f"获取所有LLM训练任务失败: {str(e)}")
+            return []
+    
+    def get_all_jobs(self) -> Dict[str, List]:
+        """获取所有训练任务（VLM和LLM）"""
+        try:
+            vlm_jobs = self.get_all_training_jobs()
+            llm_jobs = self.get_all_llm_training_jobs()
+            
+            return {
+                'vlm_jobs': vlm_jobs,
+                'llm_jobs': llm_jobs,
+                'total_vlm': len(vlm_jobs),
+                'total_llm': len(llm_jobs)
+            }
+        except Exception as e:
+            self.logger.error(f"获取所有训练任务失败: {str(e)}")
+            return {'vlm_jobs': [], 'llm_jobs': [], 'total_vlm': 0, 'total_llm': 0}
+    
     def get_jobs_by_status(self, status: TrainingStatus) -> List[TrainingJob]:
-        """根据状态获取训练任务"""
+        """根据状态获取VLM训练任务"""
         try:
             all_jobs = self.get_all_training_jobs()
             return [job for job in all_jobs if job.status == status]
         except Exception as e:
-            self.logger.error(f"根据状态获取训练任务失败: {str(e)}")
+            self.logger.error(f"根据状态获取VLM训练任务失败: {str(e)}")
+            return []
+    
+    def get_llm_jobs_by_status(self, status: TrainingStatus) -> List[LLMTrainingJob]:
+        """根据状态获取LLM训练任务"""
+        try:
+            all_jobs = self.get_all_llm_training_jobs()
+            return [job for job in all_jobs if job.status == status]
+        except Exception as e:
+            self.logger.error(f"根据状态获取LLM训练任务失败: {str(e)}")
             return []
     
     def save_training_log(self, job_id: str, log_entry: Dict[str, Any]) -> bool:
