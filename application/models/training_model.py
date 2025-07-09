@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -16,7 +16,12 @@ class TrainingStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class TrainHyperParams(BaseModel):
+class TrainingTaskType(str, Enum):
+    MULTIMODAL = "multimodal"
+    LANGUAGE_MODEL = "language_model"
+
+
+class MultiModalTrainParams(BaseModel):
     num_epochs: int = Field(default=1, description="训练轮数")
     batch_size: int = Field(default=1, description="批次大小")
     learning_rate: float = Field(default=1e-4, description="学习率")
@@ -38,16 +43,39 @@ class TrainHyperParams(BaseModel):
     torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
 
 
+class LanguageModelTrainParams(BaseModel):
+    num_epochs: int = Field(default=1, description="训练轮数")
+    batch_size: int = Field(default=1, description="批次大小")
+    learning_rate: float = Field(default=1e-4, description="学习率")
+    gradient_accumulation_steps: int = Field(default=4, description="梯度累积步数")
+    eval_steps: int = Field(default=100, description="评估步数")
+    save_steps: int = Field(default=100, description="保存步数")
+    save_total_limit: int = Field(default=2, description="保存总数限制")
+    logging_steps: int = Field(default=5, description="日志步数")
+    max_length: int = Field(default=2048, description="最大长度")
+    warmup_ratio: float = Field(default=0.05, description="预热比例")
+    dataloader_num_workers: int = Field(default=4, description="数据加载器工作进程数")
+    dataset_num_proc: int = Field(default=4, description="数据集处理进程数")
+    save_only_model: bool = Field(default=True, description="仅保存模型")
+    train_type: str = Field(default="standard", description="训练类型")
+    torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
+
+
 class TrainingJobCreateRequest(BaseModel):
     """创建训练任务请求模型"""
 
+    task_type: TrainingTaskType = Field(
+        default=TrainingTaskType.MULTIMODAL, description="任务类型"
+    )
     data_path: str = Field(..., description="数据集路径")
     model_path: str = Field(..., description="模型路径")
     output_dir: str = Field(..., description="输出目录")
     priority: int = Field(
         default=0, ge=0, le=10, description="任务优先级，0-10，数字越大优先级越高"
     )
-    train_params: Optional[TrainHyperParams] = Field(default=None, description="训练超参数配置")
+    train_params: Optional[
+        Union[MultiModalTrainParams, LanguageModelTrainParams, dict]
+    ] = Field(default=None, description="训练超参数配置")
 
 
 class TrainingJob(BaseModel):
@@ -60,6 +88,9 @@ class TrainingJob(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
     started_at: Optional[datetime] = Field(default=None, description="开始时间")
     completed_at: Optional[datetime] = Field(default=None, description="完成时间")
+    task_type: TrainingTaskType = Field(
+        default=TrainingTaskType.MULTIMODAL, description="任务类型"
+    )
 
     # 训练参数
     gpu_id: str = Field(..., description="GPU ID")
