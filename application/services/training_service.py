@@ -1,6 +1,5 @@
 import json
 import os
-import socket
 import subprocess
 import threading
 import time
@@ -17,22 +16,9 @@ from application.services.redis_service import get_redis_service
 from application.utils.gpu_utils import get_gpu_manager
 from application.utils.logger import get_system_logger, get_training_logger
 
+from .training_handler import TrainingHandler
+
 logger = get_system_logger()
-
-
-class PortAllocator:
-    def __init__(self, port_list):
-        self.port_list = port_list
-
-    def allocate(self):
-        for port in self.port_list:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                try:
-                    s.bind(("", port))
-                    return port
-                except OSError:
-                    continue
-        return None
 
 
 class TrainingService:
@@ -45,17 +31,7 @@ class TrainingService:
         self.active_processes: Dict[str, subprocess.Popen] = {}
         self.queue_processor_running = False
         self.queue_processor_thread = None
-
-    def handle_deploy_task(self, deploy_params):
-        # 端口池可通过配置注入，这里用硬编码示例
-        port_list = [8001, 8002, 8003]
-        allocator = PortAllocator(port_list)
-        port = allocator.allocate()
-        if not port:
-            raise Exception("无可用端口，请稍后重试")
-        deploy_params.port = port
-        # 这里可扩展实际部署逻辑，如启动服务、写入状态等
-        return port
+        self.training_handler = TrainingHandler()
 
     def create_training_job(self, request: TrainingJobCreateRequest) -> TrainingJob:
         """创建训练任务，支持多任务类型"""
@@ -64,77 +40,11 @@ class TrainingService:
             gpu_id_list = self._auto_allocate_gpus(1)
 
             if request.task_type == "multimodal":
-                params = request.train_params or {}
-                if hasattr(params, "dict"):
-                    params = params.model_dump()
-                job = TrainingJob(
-                    gpu_id=",".join(gpu_id_list),
-                    data_path=request.data_path,
-                    model_path=request.model_path,
-                    output_dir=request.output_dir,
-                    task_type=request.task_type,
-                    num_epochs=params.get("num_epochs", 1),
-                    batch_size=params.get("batch_size", 1),
-                    learning_rate=params.get("learning_rate", 1e-4),
-                    vit_lr=params.get("vit_lr", 1e-5),
-                    aligner_lr=params.get("aligner_lr", 1e-5),
-                    lora_rank=params.get("lora_rank", 16),
-                    lora_alpha=params.get("lora_alpha", 32),
-                    gradient_accumulation_steps=params.get(
-                        "gradient_accumulation_steps", 4
-                    ),
-                    eval_steps=params.get("eval_steps", 100),
-                    save_steps=params.get("save_steps", 100),
-                    save_total_limit=params.get("save_total_limit", 2),
-                    logging_steps=params.get("logging_steps", 5),
-                    max_length=params.get("max_length", 8192),
-                    warmup_ratio=params.get("warmup_ratio", 0.05),
-                    dataloader_num_workers=params.get("dataloader_num_workers", 4),
-                    dataset_num_proc=params.get("dataset_num_proc", 4),
-                    save_only_model=params.get("save_only_model", True),
-                    train_type=params.get("train_type", "lora"),
-                    torch_dtype=params.get("torch_dtype", "bfloat16"),
-                )
+                job_kwargs = self.training_handler.handle_multimodal(request, gpu_id_list)
+                job = TrainingJob(**job_kwargs)
             elif request.task_type == "language_model":
-                params = request.train_params or {}
-                if hasattr(params, "dict"):
-                    params = params.model_dump()
-                job = TrainingJob(
-                    gpu_id=",".join(gpu_id_list),
-                    data_path=request.data_path,
-                    model_path=request.model_path,
-                    output_dir=request.output_dir,
-                    task_type=request.task_type,
-                    num_epochs=params.get("num_epochs", 1),
-                    batch_size=params.get("batch_size", 1),
-                    learning_rate=params.get("learning_rate", 1e-4),
-                    gradient_accumulation_steps=params.get(
-                        "gradient_accumulation_steps", 4
-                    ),
-                    eval_steps=params.get("eval_steps", 100),
-                    save_steps=params.get("save_steps", 100),
-                    save_total_limit=params.get("save_total_limit", 2),
-                    logging_steps=params.get("logging_steps", 5),
-                    max_length=params.get("max_length", 2048),
-                    warmup_ratio=params.get("warmup_ratio", 0.05),
-                    dataloader_num_workers=params.get("dataloader_num_workers", 4),
-                    dataset_num_proc=params.get("dataset_num_proc", 4),
-                    save_only_model=params.get("save_only_model", True),
-                    train_type=params.get("train_type", "standard"),
-                    torch_dtype=params.get("torch_dtype", "bfloat16"),
-                )
-            elif request.task_type == "deploy":
-                params = request.train_params or {}
-                if hasattr(params, "dict"):
-                    params = params.model_dump()
-                port = self.handle_deploy_task(params)
-                job = TrainingJob(
-                    task_type=request.task_type,
-                    deploy_port=port,
-                    # 其他部署参数可按需补充
-                )
-                # 可扩展：保存任务、写入事件、状态等
-                return job
+                job_kwargs = self.training_handler.handle_language_model(request, gpu_id_list)
+                job = TrainingJob(**job_kwargs)
             else:
                 raise ValueError(f"不支持的任务类型: {request.task_type}")
 
