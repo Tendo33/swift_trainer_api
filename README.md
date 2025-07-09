@@ -68,6 +68,64 @@ swift-api/
                               加入队列 → 等待GPU可用 → 自动启动
 ```
 
+## 🧩 多任务类型训练支持
+
+自 v2.0 起，系统支持多种训练任务类型（如多模态模型、语言模型等），通过 `task_type` 字段区分。
+
+- `task_type`: 任务类型，当前支持 `multimodal`（多模态）和 `language_model`（语言模型），后续可扩展。
+- `train_params`: 训练参数，结构随任务类型变化，详见下方示例。
+
+### 任务类型与参数模型
+
+| 任务类型         | 说明           | 参数模型（train_params）示例 |
+|------------------|----------------|-----------------------------|
+| multimodal       | 多模态模型训练 | MultiModalTrainParams       |
+| language_model   | 语言模型训练   | LanguageModelTrainParams    |
+
+> 若不指定 `task_type`，默认为 `multimodal`，兼容老接口。
+
+---
+
+## 📚 API文档（多任务类型示例）
+
+### 创建多模态训练任务
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/training/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_type": "multimodal",
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "output_dir": "output/multimodal_001",
+    "train_params": {
+      "num_epochs": 2,
+      "batch_size": 8,
+      "vit_lr": 1e-5
+    }
+  }'
+```
+
+### 创建语言模型训练任务
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/training/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_type": "language_model",
+    "data_path": "AI-ModelScope/text#10000",
+    "model_path": "Qwen/Qwen2.5-7B",
+    "output_dir": "output/lm_001",
+    "train_params": {
+      "num_epochs": 3,
+      "batch_size": 4,
+      "learning_rate": 0.0001
+    }
+  }'
+```
+
+---
+
 ## 📚 API文档
 
 ### 核心端点
@@ -99,6 +157,59 @@ swift-api/
 | `POST` | `/api/v1/training/queue/processor/start` | 启动队列处理器 | 200 |
 | `POST` | `/api/v1/training/queue/processor/stop` | 停止队列处理器 | 200 |
 | `GET` | `/api/v1/training/queue/processor/status` | 获取处理器状态 | 200 |
+
+## ⚙️ 训练参数说明（新版）
+
+- 训练参数通过 `train_params` 字段传递，结构随 `task_type` 变化。
+- 典型参数如下：
+
+### MultiModalTrainParams
+```json
+{
+  "num_epochs": 1,
+  "batch_size": 1,
+  "learning_rate": 0.0001,
+  "vit_lr": 0.00001,
+  "aligner_lr": 0.00001,
+  "lora_rank": 16,
+  "lora_alpha": 32,
+  "gradient_accumulation_steps": 4,
+  "eval_steps": 100,
+  "save_steps": 100,
+  "save_total_limit": 2,
+  "logging_steps": 5,
+  "max_length": 8192,
+  "warmup_ratio": 0.05,
+  "dataloader_num_workers": 4,
+  "dataset_num_proc": 4,
+  "save_only_model": true,
+  "train_type": "lora",
+  "torch_dtype": "bfloat16"
+}
+```
+
+### LanguageModelTrainParams
+```json
+{
+  "num_epochs": 1,
+  "batch_size": 1,
+  "learning_rate": 0.0001,
+  "gradient_accumulation_steps": 4,
+  "eval_steps": 100,
+  "save_steps": 100,
+  "save_total_limit": 2,
+  "logging_steps": 5,
+  "max_length": 2048,
+  "warmup_ratio": 0.05,
+  "dataloader_num_workers": 4,
+  "dataset_num_proc": 4,
+  "save_only_model": true,
+  "train_type": "standard",
+  "torch_dtype": "bfloat16"
+}
+```
+
+> 你可以根据实际需求，仅传递需要覆盖的参数，未传递的参数将使用默认值。
 
 ## ⚙️ 配置说明
 
@@ -134,33 +245,6 @@ APP_PORT=8000
 | `REDIS_HOST` | Redis服务器地址 | localhost |
 | `REDIS_PORT` | Redis端口 | 6379 |
 | `LOG_LEVEL` | 日志级别 | INFO |
-
-### Swift训练参数
-
-当前系统使用以下固定的训练参数：
-
-```python
-# 训练参数配置
-num_epochs=1
-batch_size=1
-learning_rate=1e-4
-vit_lr=1e-5
-aligner_lr=1e-5
-lora_rank=16
-lora_alpha=32
-gradient_accumulation_steps=4
-eval_steps=100
-save_steps=100
-save_total_limit=2
-logging_steps=5
-max_length=8192
-warmup_ratio=0.05
-dataloader_num_workers=4
-dataset_num_proc=4
-save_only_model=True
-train_type="lora"
-torch_dtype="bfloat16"
-```
 
 ## ⚡ 快速开始
 
@@ -239,6 +323,40 @@ curl -X POST "http://localhost:8000/api/v1/training/jobs" \
     "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
     "output_dir": "output/low_priority_training",
     "priority": 1
+  }'
+```
+
+### 多任务类型创建示例
+
+```bash
+# 创建多模态训练任务
+curl -X POST "http://localhost:8000/api/v1/training/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_type": "multimodal",
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "output_dir": "output/multimodal_001",
+    "train_params": {
+      "num_epochs": 2,
+      "batch_size": 8,
+      "vit_lr": 1e-5
+    }
+  }'
+
+# 创建语言模型训练任务
+curl -X POST "http://localhost:8000/api/v1/training/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_type": "language_model",
+    "data_path": "AI-ModelScope/text#10000",
+    "model_path": "Qwen/Qwen2.5-7B",
+    "output_dir": "output/lm_001",
+    "train_params": {
+      "num_epochs": 3,
+      "batch_size": 4,
+      "learning_rate": 0.0001
+    }
   }'
 ```
 
