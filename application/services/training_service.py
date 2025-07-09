@@ -36,32 +36,37 @@ class TrainingService:
             # 自动分配1个GPU
             gpu_id_list = self._auto_allocate_gpus(1)
 
-            # 创建训练任务 - 使用写死的默认参数
+            # 合并参数，优先用 request.train_params，否则用默认
+            params = request.train_params or {}
+            # 兼容 Pydantic BaseModel
+            if hasattr(params, 'dict'):
+                params = params.dict()
+
+            # 创建训练任务 - 参数全部可配置
             job = TrainingJob(
                 gpu_id=",".join(gpu_id_list),
                 data_path=request.data_path,
                 model_path=request.model_path,
                 output_dir=request.output_dir,
-                # 写死的训练参数
-                num_epochs=1,
-                batch_size=1,
-                learning_rate=1e-4,
-                vit_lr=1e-5,
-                aligner_lr=1e-5,
-                lora_rank=16,
-                lora_alpha=32,
-                gradient_accumulation_steps=4,
-                eval_steps=100,
-                save_steps=100,
-                save_total_limit=2,
-                logging_steps=5,
-                max_length=8192,
-                warmup_ratio=0.05,
-                dataloader_num_workers=4,
-                dataset_num_proc=4,
-                save_only_model=True,
-                train_type="lora",
-                torch_dtype="bfloat16",
+                num_epochs=params.get("num_epochs", 1),
+                batch_size=params.get("batch_size", 1),
+                learning_rate=params.get("learning_rate", 1e-4),
+                vit_lr=params.get("vit_lr", 1e-5),
+                aligner_lr=params.get("aligner_lr", 1e-5),
+                lora_rank=params.get("lora_rank", 16),
+                lora_alpha=params.get("lora_alpha", 32),
+                gradient_accumulation_steps=params.get("gradient_accumulation_steps", 4),
+                eval_steps=params.get("eval_steps", 100),
+                save_steps=params.get("save_steps", 100),
+                save_total_limit=params.get("save_total_limit", 2),
+                logging_steps=params.get("logging_steps", 5),
+                max_length=params.get("max_length", 8192),
+                warmup_ratio=params.get("warmup_ratio", 0.05),
+                dataloader_num_workers=params.get("dataloader_num_workers", 4),
+                dataset_num_proc=params.get("dataset_num_proc", 4),
+                save_only_model=params.get("save_only_model", True),
+                train_type=params.get("train_type", "lora"),
+                torch_dtype=params.get("torch_dtype", "bfloat16"),
             )
 
             # 检查GPU可用性
@@ -626,57 +631,35 @@ class TrainingService:
             return None
 
     def _build_training_command(self, job: TrainingJob) -> List[str]:
-        """构建训练命令 - 使用写死的参数"""
+        """构建训练命令 - 动态参数"""
         command = [
             "swift",
             "sft",
-            "--model",
-            job.model_path,
-            "--dataset",
-            job.data_path,
-            "--train_type",
-            "lora",
-            "--torch_dtype",
-            "bfloat16",
-            "--num_train_epochs",
-            "1",
-            "--per_device_train_batch_size",
-            "1",
-            "--per_device_eval_batch_size",
-            "1",
-            "--learning_rate",
-            "1e-4",
-            "--vit_lr",
-            "1e-5",
-            "--aligner_lr",
-            "1e-5",
-            "--lora_rank",
-            "16",
-            "--lora_alpha",
-            "32",
-            "--gradient_accumulation_steps",
-            "4",
-            "--eval_steps",
-            "100",
-            "--save_steps",
-            "100",
-            "--save_total_limit",
-            "2",
-            "--logging_steps",
-            "5",
-            "--max_length",
-            "8192",
-            "--output_dir",
-            job.output_dir,
-            "--warmup_ratio",
-            "0.05",
-            "--dataloader_num_workers",
-            "4",
-            "--dataset_num_proc",
-            "4",
-            "--save_only_model",
+            "--model", job.model_path,
+            "--dataset", job.data_path,
+            "--train_type", job.train_type,
+            "--torch_dtype", job.torch_dtype,
+            "--num_train_epochs", str(job.num_epochs),
+            "--per_device_train_batch_size", str(job.batch_size),
+            "--per_device_eval_batch_size", str(job.batch_size),
+            "--learning_rate", str(job.learning_rate),
+            "--vit_lr", str(job.vit_lr),
+            "--aligner_lr", str(job.aligner_lr),
+            "--lora_rank", str(job.lora_rank),
+            "--lora_alpha", str(job.lora_alpha),
+            "--gradient_accumulation_steps", str(job.gradient_accumulation_steps),
+            "--eval_steps", str(job.eval_steps),
+            "--save_steps", str(job.save_steps),
+            "--save_total_limit", str(job.save_total_limit),
+            "--logging_steps", str(job.logging_steps),
+            "--max_length", str(job.max_length),
+            "--output_dir", job.output_dir,
+            "--warmup_ratio", str(job.warmup_ratio),
+            "--dataloader_num_workers", str(job.dataloader_num_workers),
+            "--dataset_num_proc", str(job.dataset_num_proc),
         ]
-
+        if job.save_only_model:
+            command.append("--save_only_model")
         return command
 
     def _build_environment(self, job: TrainingJob) -> Dict[str, str]:

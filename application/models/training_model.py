@@ -16,7 +16,28 @@ class TrainingStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-# 后续可以添加一些参数，比如训练类型，训练参数等
+class TrainHyperParams(BaseModel):
+    num_epochs: int = Field(default=1, description="训练轮数")
+    batch_size: int = Field(default=1, description="批次大小")
+    learning_rate: float = Field(default=1e-4, description="学习率")
+    vit_lr: float = Field(default=1e-5, description="ViT学习率")
+    aligner_lr: float = Field(default=1e-5, description="Aligner学习率")
+    lora_rank: int = Field(default=16, description="LoRA rank")
+    lora_alpha: int = Field(default=32, description="LoRA alpha")
+    gradient_accumulation_steps: int = Field(default=4, description="梯度累积步数")
+    eval_steps: int = Field(default=100, description="评估步数")
+    save_steps: int = Field(default=100, description="保存步数")
+    save_total_limit: int = Field(default=2, description="保存总数限制")
+    logging_steps: int = Field(default=5, description="日志步数")
+    max_length: int = Field(default=8192, description="最大长度")
+    warmup_ratio: float = Field(default=0.05, description="预热比例")
+    dataloader_num_workers: int = Field(default=4, description="数据加载器工作进程数")
+    dataset_num_proc: int = Field(default=4, description="数据集处理进程数")
+    save_only_model: bool = Field(default=True, description="仅保存模型")
+    train_type: str = Field(default="lora", description="训练类型")
+    torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
+
+
 class TrainingJobCreateRequest(BaseModel):
     """创建训练任务请求模型"""
 
@@ -26,6 +47,7 @@ class TrainingJobCreateRequest(BaseModel):
     priority: int = Field(
         default=0, ge=0, le=10, description="任务优先级，0-10，数字越大优先级越高"
     )
+    train_params: Optional[TrainHyperParams] = Field(default=None, description="训练超参数配置")
 
 
 class TrainingJob(BaseModel):
