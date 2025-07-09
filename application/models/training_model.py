@@ -19,6 +19,7 @@ class TrainingStatus(str, Enum):
 class TrainingTaskType(str, Enum):
     MULTIMODAL = "multimodal"
     LANGUAGE_MODEL = "language_model"
+    DEPLOY = "deploy"
 
 
 class MultiModalTrainParams(BaseModel):
@@ -61,20 +62,28 @@ class LanguageModelTrainParams(BaseModel):
     torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
 
 
+class DeployParams(BaseModel):
+    model_path: str = Field(..., description="待部署模型路径")
+    deploy_target: str = Field(..., description="部署目标环境，如 local/k8s/cloud")
+    version: Optional[str] = Field(default=None, description="部署版本号")
+    resources: Optional[dict] = Field(default=None, description="资源需求")
+    port: Optional[int] = Field(default=None, description="分配的部署端口")
+
+
 class TrainingJobCreateRequest(BaseModel):
     """创建训练任务请求模型"""
 
     task_type: TrainingTaskType = Field(
         default=TrainingTaskType.MULTIMODAL, description="任务类型"
     )
-    data_path: str = Field(..., description="数据集路径")
-    model_path: str = Field(..., description="模型路径")
-    output_dir: str = Field(..., description="输出目录")
+    data_path: Optional[str] = Field(default=None, description="数据集路径")
+    model_path: Optional[str] = Field(default=None, description="模型路径")
+    output_dir: Optional[str] = Field(default=None, description="输出目录")
     priority: int = Field(
         default=0, ge=0, le=10, description="任务优先级，0-10，数字越大优先级越高"
     )
     train_params: Optional[
-        Union[MultiModalTrainParams, LanguageModelTrainParams, dict]
+        Union[MultiModalTrainParams, LanguageModelTrainParams, DeployParams, dict]
     ] = Field(default=None, description="训练超参数配置")
 
 
@@ -119,6 +128,7 @@ class TrainingJob(BaseModel):
     save_only_model: bool = Field(default=True, description="仅保存模型")
     train_type: str = Field(default="lora", description="训练类型")
     torch_dtype: str = Field(default="bfloat16", description="PyTorch数据类型")
+    deploy_port: Optional[int] = Field(default=None, description="部署分配端口")
 
     # 运行时信息
     process_id: Optional[int] = Field(default=None, description="进程ID")

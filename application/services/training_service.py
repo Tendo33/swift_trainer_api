@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 import subprocess
 import threading
 import time
@@ -19,6 +20,21 @@ from application.utils.logger import get_system_logger, get_training_logger
 logger = get_system_logger()
 
 
+class PortAllocator:
+    def __init__(self, port_list):
+        self.port_list = port_list
+
+    def allocate(self):
+        for port in self.port_list:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("", port))
+                    return port
+                except OSError:
+                    continue
+        return None
+
+
 class TrainingService:
     """训练服务类，负责执行和管理Swift训练任务"""
 
@@ -30,13 +46,23 @@ class TrainingService:
         self.queue_processor_running = False
         self.queue_processor_thread = None
 
+    def handle_deploy_task(self, deploy_params):
+        # 端口池可通过配置注入，这里用硬编码示例
+        port_list = [8001, 8002, 8003]
+        allocator = PortAllocator(port_list)
+        port = allocator.allocate()
+        if not port:
+            raise Exception("无可用端口，请稍后重试")
+        deploy_params.port = port
+        # 这里可扩展实际部署逻辑，如启动服务、写入状态等
+        return port
+
     def create_training_job(self, request: TrainingJobCreateRequest) -> TrainingJob:
         """创建训练任务，支持多任务类型"""
         try:
             # 自动分配1个GPU
             gpu_id_list = self._auto_allocate_gpus(1)
 
-            # 任务类型分发
             if request.task_type == "multimodal":
                 params = request.train_params or {}
                 if hasattr(params, "dict"):
@@ -97,6 +123,18 @@ class TrainingService:
                     train_type=params.get("train_type", "standard"),
                     torch_dtype=params.get("torch_dtype", "bfloat16"),
                 )
+            elif request.task_type == "deploy":
+                params = request.train_params or {}
+                if hasattr(params, "dict"):
+                    params = params.model_dump()
+                port = self.handle_deploy_task(params)
+                job = TrainingJob(
+                    task_type=request.task_type,
+                    deploy_port=port,
+                    # 其他部署参数可按需补充
+                )
+                # 可扩展：保存任务、写入事件、状态等
+                return job
             else:
                 raise ValueError(f"不支持的任务类型: {request.task_type}")
 
