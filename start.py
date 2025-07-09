@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import uvicorn
-from application.config import settings
+from application.config import print_config_info, settings
 from application.utils.logger import get_system_logger
 
 # 添加项目根目录到Python路径
@@ -28,19 +28,15 @@ def main():
     
     # 检查必要的目录
     os.makedirs(settings.LOG_DIR, exist_ok=True)
-    os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
-    os.makedirs(settings.DATA_DIR, exist_ok=True)
     
     logger.info(f"日志目录: {settings.LOG_DIR}")
-    logger.info(f"输出目录: {settings.OUTPUT_DIR}")
-    logger.info(f"数据目录: {settings.DATA_DIR}")
-    
+    print_config_info()
     # 启动服务器
     uvicorn.run(
         "application.main:app",
         host=settings.APP_HOST,
         port=settings.APP_PORT,
-        reload=True,
+        reload=False,
         log_level=settings.LOG_LEVEL.lower(),
         access_log=True
     )

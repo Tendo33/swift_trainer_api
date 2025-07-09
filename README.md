@@ -1,27 +1,35 @@
-# Swift Trainer API
+# Swift Trainer API 🚀
 
-基于FastAPI的Swift训练任务管理API系统，支持多GPU训练、Redis状态管理和详细日志记录。
+基于 FastAPI 的 Swift 训练任务管理 API 系统，支持多 GPU 训练、Redis 状态管理、GPU自动排队功能和详细日志记录。
 
-## 功能特性
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
+[![Redis](https://img.shields.io/badge/Redis-7+-red.svg)](https://redis.io/)
+[![Swift](https://img.shields.io/badge/Swift-3.5.0-orange.svg)](https://github.com/modelscope/swift)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-- 🚀 **FastAPI接口**：RESTful API管理训练任务
-- 🔄 **Redis状态管理**：实时记录训练状态和进度
-- 📝 **详细日志系统**：多级别日志记录和查询
-- ⚡ **异步任务处理**：支持并发训练任务
-- 🎯 **GPU资源管理**：智能分配GPU资源
-- 📊 **任务监控**：实时监控训练进度和状态
+## ✨ 主要特性
 
-## 项目结构
+- 🚀 **Swift训练任务管理**: 完整的训练任务生命周期管理
+- 🎯 **GPU自动排队**: 智能GPU资源分配和排队机制
+- 🔄 **优先级管理**: 支持任务优先级设置（0-10）
+- 📊 **实时监控**: 训练进度、GPU状态、系统资源监控
+- 💾 **Redis存储**: 持久化任务状态和训练数据
+- 📝 **详细日志**: 完整的训练日志和事件记录
+- 🐳 **Docker支持**: 一键部署和容器化运行
+- 🔧 **RESTful API**: 标准化的API接口设计
+
+## 🏗️ 项目结构
 
 ```
-swift_trainer_api/
-├── app/
+swift-api/
+├── application/              # 主应用目录
 │   ├── __init__.py
 │   ├── main.py              # FastAPI应用入口
 │   ├── config.py            # 配置管理
 │   ├── models/              # 数据模型
 │   │   ├── __init__.py
-│   │   └── training.py      # 训练任务模型
+│   │   └── training_model.py # 训练任务模型
 │   ├── services/            # 业务逻辑
 │   │   ├── __init__.py
 │   │   ├── training_service.py  # 训练服务
@@ -33,82 +41,341 @@ swift_trainer_api/
 │       ├── __init__.py
 │       ├── logger.py        # 日志工具
 │       └── gpu_utils.py     # GPU工具
-├── logs/                    # 日志文件目录
-├── output/                  # 训练输出目录
-├── requirements.txt         # 依赖包
-├── docker-compose.yml       # Docker配置
-└── README.md               # 项目文档
+├── env/                     # 环境配置文件
+├── install_all.sh          # Swift环境安装脚本
+├── start.py                # 启动脚本
+├── docker-compose.yml      # Docker编排配置
+├── Dockerfile              # Docker镜像配置
 ```
 
-## 快速开始
+## 🎯 GPU排队功能
 
-### 1. 安装依赖
+### 核心特性
+
+1. **自动GPU分配**: 无需手动指定GPU ID，系统自动选择最优GPU
+2. **智能排队**: 当GPU不可用时，任务自动加入队列等待
+3. **优先级管理**: 支持0-10级优先级，数字越大优先级越高
+4. **动态重分配**: 队列中的任务可以重新分配GPU
+5. **后台处理**: 自动队列处理器定期检查并启动任务
+
+### 工作流程
+
+```
+用户创建任务 → 系统自动分配GPU → 检查GPU可用性
+                                    ↓
+                              GPU可用？ → 是 → 直接启动任务
+                                    ↓ 否
+                              加入队列 → 等待GPU可用 → 自动启动
+```
+
+## 📚 API文档
+
+### 核心端点
+
+| 方法 | 端点 | 描述 | 状态码 |
+|------|------|------|--------|
+| `POST` | `/api/v1/training/jobs` | 创建训练任务 | 201 |
+| `POST` | `/api/v1/training/jobs/{job_id}/start` | 启动训练任务 | 200 |
+| `POST` | `/api/v1/training/jobs/{job_id}/stop` | 停止训练任务 | 200 |
+| `POST` | `/api/v1/training/jobs/{job_id}/export` | 手动触发模型导出 | 200 |
+| `GET` | `/api/v1/training/jobs/{job_id}/status` | 获取训练状态 | 200 |
+| `GET` | `/api/v1/training/jobs/{job_id}` | 获取任务详情 | 200 |
+| `GET` | `/api/v1/training/jobs` | 获取任务列表 | 200 |
+| `DELETE` | `/api/v1/training/jobs/{job_id}` | 删除训练任务 | 204 |
+| `GET` | `/api/v1/training/jobs/{job_id}/logs` | 获取训练日志 | 200 |
+| `GET` | `/api/v1/training/jobs/{job_id}/events` | 获取训练事件 | 200 |
+| `GET` | `/api/v1/training/gpus` | 获取GPU信息 | 200 |
+| `GET` | `/api/v1/training/system/status` | 获取系统状态 | 200 |
+| `GET` | `/api/v1/training/health` | 健康检查 | 200 |
+
+### GPU队列管理端点
+
+| 方法 | 端点 | 描述 | 状态码 |
+|------|------|------|--------|
+| `GET` | `/api/v1/training/queue` | 获取GPU队列状态 | 200 |
+| `POST` | `/api/v1/training/queue/process` | 手动处理队列 | 200 |
+| `DELETE` | `/api/v1/training/queue/{job_id}` | 从队列移除任务 | 200 |
+| `GET` | `/api/v1/training/queue/{job_id}/status` | 获取任务队列状态 | 200 |
+| `POST` | `/api/v1/training/queue/processor/start` | 启动队列处理器 | 200 |
+| `POST` | `/api/v1/training/queue/processor/stop` | 停止队列处理器 | 200 |
+| `GET` | `/api/v1/training/queue/processor/status` | 获取处理器状态 | 200 |
+
+## ⚙️ 配置说明
+
+### 环境变量配置
+
+创建 `env/.env.dev` 文件：
+
+```env
+# 环境配置
+ENVIRONMENT=dev
+
+# Redis配置
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
+
+# 日志配置
+LOG_LEVEL=INFO
+LOG_DIR=logs
+
+# 应用配置
+API_PREFIX=/api/v1
+APP_HOST=0.0.0.0
+APP_PORT=8000
+
+```
+
+### 主要配置项说明
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `REDIS_HOST` | Redis服务器地址 | localhost |
+| `REDIS_PORT` | Redis端口 | 6379 |
+| `LOG_LEVEL` | 日志级别 | INFO |
+
+### Swift训练参数
+
+当前系统使用以下固定的训练参数：
+
+```python
+# 训练参数配置
+num_epochs=1
+batch_size=1
+learning_rate=1e-4
+vit_lr=1e-5
+aligner_lr=1e-5
+lora_rank=16
+lora_alpha=32
+gradient_accumulation_steps=4
+eval_steps=100
+save_steps=100
+save_total_limit=2
+logging_steps=5
+max_length=8192
+warmup_ratio=0.05
+dataloader_num_workers=4
+dataset_num_proc=4
+save_only_model=True
+train_type="lora"
+torch_dtype="bfloat16"
+```
+
+## ⚡ 快速开始
+
+### Docker部署 (推荐)
 
 ```bash
-pip install -r requirements.txt
+# 1. 克隆项目
+git clone <repository-url>
+cd swift-api
+
+# 2. 构建并启动服务
+docker-compose up -d
+
+# 3. 查看服务状态
+docker-compose ps
+
+# 4. 访问API文档
+# 打开浏览器访问：http://localhost:8000/docs
 ```
 
-### 2. 启动Redis服务
-
-```bash
-docker-compose up -d redis
-```
-
-### 3. 启动API服务
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 4. 访问API文档
-
-打开浏览器访问：http://localhost:8000/docs
-
-## API使用示例
+## 💡 使用示例
 
 ### 创建训练任务
 
+#### 基本用法（自动GPU分配）
+
 ```bash
+# 创建训练任务 - 系统自动分配GPU
 curl -X POST "http://localhost:8000/api/v1/training/jobs" \
   -H "Content-Type: application/json" \
   -d '{
-    "gpu_id": "0",
-    "data_path": "/path/to/dataset",
+    "data_path": "AI-ModelScope/coco#20000",
     "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
-    "output_dir": "output",
-    "num_epochs": 1,
-    "batch_size": 1,
-    "learning_rate": 1e-4
+    "output_dir": "output/training_001"
   }'
 ```
 
-### 查询任务状态
+**响应示例:**
 
-```bash
-curl -X GET "http://localhost:8000/api/v1/training/jobs/{job_id}/status"
+```json
+// GPU可用时 - 直接创建
+{
+    "job_id": "training_001",
+    "status": "pending",
+    "message": "训练任务创建成功"
+}
+
+// GPU不可用时 - 加入队列
+{
+    "job_id": "training_001",
+    "status": "queued",
+    "message": "训练任务已创建并加入GPU队列",
+    "queue_position": 2,
+    "estimated_wait_time": "根据队列位置和GPU使用情况估算"
+}
 ```
 
-### 获取训练日志
+#### 高级用法（设置优先级）
 
 ```bash
-curl -X GET "http://localhost:8000/api/v1/training/jobs/{job_id}/logs"
+# 高优先级任务
+curl -X POST "http://localhost:8000/api/v1/training/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "output_dir": "output/urgent_training",
+    "priority": 9
+  }'
+
+# 低优先级任务
+curl -X POST "http://localhost:8000/api/v1/training/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "output_dir": "output/low_priority_training",
+    "priority": 1
+  }'
 ```
 
-## 配置说明
+### GPU队列管理
 
-主要配置项在 `app/config.py` 中：
+```bash
+# 查看队列状态
+curl -X GET "http://localhost:8000/api/v1/training/queue"
 
-- `REDIS_HOST`: Redis服务器地址
-- `REDIS_PORT`: Redis端口
-- `REDIS_DB`: Redis数据库编号
-- `LOG_LEVEL`: 日志级别
-- `LOG_DIR`: 日志目录
-- `OUTPUT_DIR`: 训练输出目录
+# 手动处理队列
+curl -X POST "http://localhost:8000/api/v1/training/queue/process"
 
-## 开发说明
+# 查看特定任务在队列中的状态
+curl -X GET "http://localhost:8000/api/v1/training/queue/training_001/status"
 
-### 添加新的训练参数
+# 从队列中移除任务
+curl -X DELETE "http://localhost:8000/api/v1/training/queue/training_001"
 
-1. 在 `app/models/training.py` 中添加新的模型字段
-2. 在 `app/services/training_service.py` 中更新训练命令生成逻辑
-3. 更新API文档和测试用例
+# 启动队列处理器
+curl -X POST "http://localhost:8000/api/v1/training/queue/processor/start"
+
+# 查看处理器状态
+curl -X GET "http://localhost:8000/api/v1/training/queue/processor/status"
+```
+
+### 完整的训练工作流
+
+```bash
+# 1. 创建训练任务
+curl -X POST "http://localhost:8000/api/v1/training/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "output_dir": "output/training_001"
+  }'
+
+# 2. 启动训练任务（如果任务在队列中，会自动启动）
+curl -X POST "http://localhost:8000/api/v1/training/jobs/training_001/start"
+
+# 3. 监控训练进度
+curl -X GET "http://localhost:8000/api/v1/training/jobs/training_001/progress"
+
+# 4. 查看训练日志
+curl -X GET "http://localhost:8000/api/v1/training/jobs/training_001/logs?limit=50"
+
+# 5. 训练完成后，手动导出模型（如果需要）
+curl -X POST "http://localhost:8000/api/v1/training/jobs/training_001/export"
+
+# 6. 停止训练任务（如果需要）
+curl -X POST "http://localhost:8000/api/v1/training/jobs/training_001/stop"
+```
+
+### 系统监控
+
+```bash
+# 获取GPU信息
+curl -X GET "http://localhost:8000/api/v1/training/gpus"
+
+# 获取系统状态
+curl -X GET "http://localhost:8000/api/v1/training/system/status"
+
+# 健康检查
+curl -X GET "http://localhost:8000/api/v1/training/health"
+```
+
+### 任务管理
+
+```bash
+# 获取所有任务列表
+curl -X GET "http://localhost:8000/api/v1/training/jobs"
+
+# 获取特定任务详情
+curl -X GET "http://localhost:8000/api/v1/training/jobs/training_001"
+
+# 获取训练事件历史
+curl -X GET "http://localhost:8000/api/v1/training/jobs/training_001/events"
+
+# 删除训练任务
+curl -X DELETE "http://localhost:8000/api/v1/training/jobs/training_001"
+```
+
+## 🎯 优先级使用指南
+
+### 优先级说明
+
+| 优先级 | 适用场景 | 示例 |
+|--------|----------|------|
+| 8-10 | 紧急任务、生产环境 | 线上模型更新、紧急修复 |
+| 5-7 | 重要任务 | 重要实验、关键验证 |
+| 2-4 | 普通任务 | 日常训练、测试 |
+| 0-1 | 低优先级任务 | 实验性训练、调试 |
+
+### 优先级策略
+
+- **数字越大，优先级越高**（0-10，10最高）
+- 高优先级的任务会排在队列前面
+- 同优先级按创建时间排序（FIFO）
+- 当GPU可用时，优先启动高优先级的任务
+
+### 动态调整优先级
+
+```bash
+# 1. 查看当前队列状态
+curl -X GET "http://localhost:8000/api/v1/training/queue"
+
+# 2. 从队列中移除任务
+curl -X DELETE "http://localhost:8000/api/v1/training/queue/training_001"
+
+# 3. 重新创建任务（使用新优先级）
+curl -X POST "http://localhost:8000/api/v1/training/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "output_dir": "output/training_001",
+    "priority": 9
+  }'
+```
+
+## 🔧 开发指南
+
+### 项目依赖
+
+主要依赖包：
+
+```toml
+[project]
+dependencies = [
+    "fastapi[all]>=0.115.14",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "psutil>=7.0.0",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+    "redis>=6.2.0",
+    "requests>=2.32.4",
+    "uvicorn[standard]>=0.34.3",
+]
+```
