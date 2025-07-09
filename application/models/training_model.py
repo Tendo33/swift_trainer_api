@@ -68,6 +68,7 @@ class DeployParams(BaseModel):
     version: Optional[str] = Field(default=None, description="部署版本号")
     resources: Optional[dict] = Field(default=None, description="资源需求")
     port: Optional[int] = Field(default=None, description="分配的部署端口")
+    deploy_type: str = Field(default="llm", description="部署类型，如 llm/mllm")
 
 
 class TrainingJobCreateRequest(BaseModel):

@@ -40,10 +40,14 @@ class TrainingService:
             gpu_id_list = self._auto_allocate_gpus(1)
 
             if request.task_type == "multimodal":
-                job_kwargs = self.training_handler.handle_multimodal(request, gpu_id_list)
+                job_kwargs = self.training_handler.handle_multimodal(
+                    request, gpu_id_list
+                )
                 job = TrainingJob(**job_kwargs)
             elif request.task_type == "language_model":
-                job_kwargs = self.training_handler.handle_language_model(request, gpu_id_list)
+                job_kwargs = self.training_handler.handle_language_model(
+                    request, gpu_id_list
+                )
                 job = TrainingJob(**job_kwargs)
             else:
                 raise ValueError(f"不支持的任务类型: {request.task_type}")

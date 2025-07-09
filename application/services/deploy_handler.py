@@ -13,4 +13,4 @@ class DeployHandler:
             raise Exception("无可用端口，请稍后重试")
         deploy_params.port = port
         # 这里可扩展实际部署逻辑，如启动服务、写入状态等
-        return port 
+        return port

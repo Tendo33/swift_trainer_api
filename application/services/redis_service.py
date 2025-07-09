@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 import redis
 
 from application.config import settings
+from application.models.deploy_model import DeployJob
 from application.models.training_model import TrainingJob, TrainingStatus
 from application.utils.gpu_utils import get_gpu_manager
 from application.utils.logger import get_system_logger
@@ -538,6 +539,53 @@ class RedisService:
                 "unavailable_gpus": gpu_ids,
                 "can_start": False,
             }
+
+    def save_deploy_job(self, job: DeployJob):
+        key = f"deploy:job:{job.id}"
+        self.redis_client.set(key, job.json())
+
+    def get_deploy_job(self, job_id: str) -> Optional[DeployJob]:
+        key = f"deploy:job:{job_id}"
+        data = self.redis_client.get(key)
+        if data:
+            return DeployJob.model_validate_json(data)
+        return None
+
+    def add_deploy_event(self, job_id: str, event_type: str, message: str):
+        key = f"deploy:event:{job_id}"
+        event = {
+            "type": event_type,
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+        }
+        self.redis_client.rpush(key, json.dumps(event))
+
+    def add_job_to_deploy_queue(self, job_id: str, port: int, priority: int):
+        queue_key = "deploy:queue"
+        queue_data = json.dumps(
+            {
+                "job_id": job_id,
+                "port": port,
+                "priority": priority,
+                "created_at": datetime.now().isoformat(),
+            }
+        )
+        self.redis_client.rpush(queue_key, queue_data)
+
+    def get_deploy_queue_status(self) -> Dict[str, Any]:
+        queue_key = "deploy:queue"
+        items = self.redis_client.lrange(queue_key, 0, -1)
+        return [json.loads(item) for item in items]
+
+    def remove_job_from_deploy_queue(self, job_id: str):
+        queue_key = "deploy:queue"
+        items = self.redis_client.lrange(queue_key, 0, -1)
+        for item in items:
+            data = json.loads(item)
+            if data["job_id"] == job_id:
+                self.redis_client.lrem(queue_key, 0, item)
+                return True
+        return False
 
 
 # 创建全局Redis服务实例
