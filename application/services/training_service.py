@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict
 
+from application.models.base_trainer import TrainerFactory
 from application.models.training_model import (
     TrainingJob,
     TrainingJobCreateRequest,
@@ -41,21 +42,32 @@ class TrainingService:
             gpu_count = self.training_handler.get_gpu_count_for_task(request)
             gpu_id_list = self._auto_allocate_gpus(gpu_count)
 
-            if request.task_type == "multimodal":
-                job_kwargs = self.training_handler.handle_multimodal(
+            # 使用新的架构创建训练任务
+            if request.task_type in ["llm", "mllm"]:
+                # 新的训练器类型
+                job_kwargs = self.training_handler.build_training_kwargs(
                     request, gpu_id_list
                 )
-                job = TrainingJob(**job_kwargs)
-            elif request.task_type == "language_model":
-                job_kwargs = self.training_handler.handle_language_model(
-                    request, gpu_id_list
-                )
-                job = TrainingJob(**job_kwargs)
-            elif request.task_type == "deploy":
-                job_kwargs = self.training_handler.handle_deploy(request, gpu_id_list)
                 job = TrainingJob(**job_kwargs)
             else:
-                raise ValueError(f"不支持的任务类型: {request.task_type}")
+                # 向后兼容旧的任务类型
+                if request.task_type == "multimodal":
+                    job_kwargs = self.training_handler.handle_multimodal(
+                        request, gpu_id_list
+                    )
+                    job = TrainingJob(**job_kwargs)
+                elif request.task_type == "language_model":
+                    job_kwargs = self.training_handler.handle_language_model(
+                        request, gpu_id_list
+                    )
+                    job = TrainingJob(**job_kwargs)
+                elif request.task_type == "deploy":
+                    job_kwargs = self.training_handler.handle_deploy(
+                        request, gpu_id_list
+                    )
+                    job = TrainingJob(**job_kwargs)
+                else:
+                    raise ValueError(f"不支持的任务类型: {request.task_type}")
 
             # 检查GPU可用性
             gpu_available = True
@@ -625,8 +637,35 @@ class TrainingService:
             return None
 
     def _build_training_command(self, job: TrainingJob) -> list[str]:
-        """构建训练命令 - 支持多任务类型"""
-        if job.task_type == "multimodal":
+        """构建训练命令 - 使用新的训练器架构"""
+        try:
+            # 尝试使用新的训练器架构
+            trainer_type = job.get_effective_trainer_type()
+            params = job.get_effective_params()
+
+            if trainer_type and params:
+                # 使用新的训练器构建命令
+                gpu_ids = job.gpu_id.split(",")
+                trainer = TrainerFactory.create_trainer(
+                    trainer_type=trainer_type,
+                    gpu_ids=gpu_ids,
+                    data_path=job.data_path,
+                    model_path=job.model_path,
+                    output_dir=job.output_dir,
+                    params=params,
+                )
+                return trainer.build_command()
+
+            # 向后兼容：使用旧的命令构建逻辑
+            return self._build_training_command_legacy(job)
+
+        except Exception as e:
+            self.logger.warning(f"使用新架构构建命令失败，回退到旧架构: {str(e)}")
+            return self._build_training_command_legacy(job)
+
+    def _build_training_command_legacy(self, job: TrainingJob) -> list[str]:
+        """构建训练命令 - 旧的实现（向后兼容）"""
+        if job.task_type in ["multimodal", "mllm"]:
             command = [
                 "swift",
                 "sft",
@@ -678,7 +717,7 @@ class TrainingService:
             if job.save_only_model:
                 command.append("--save_only_model")
             return command
-        elif job.task_type == "language_model":
+        elif job.task_type in ["language_model", "llm"]:
             command = [
                 "swift",
                 "sft",
@@ -727,6 +766,33 @@ class TrainingService:
 
     def _build_environment(self, job: TrainingJob) -> dict[str, str]:
         """构建环境变量"""
+        try:
+            # 尝试使用新的训练器架构
+            trainer_type = job.get_effective_trainer_type()
+            params = job.get_effective_params()
+
+            if trainer_type and params:
+                # 使用新的训练器构建环境变量
+                gpu_ids = job.gpu_id.split(",")
+                trainer = TrainerFactory.create_trainer(
+                    trainer_type=trainer_type,
+                    gpu_ids=gpu_ids,
+                    data_path=job.data_path,
+                    model_path=job.model_path,
+                    output_dir=job.output_dir,
+                    params=params,
+                )
+                return trainer.build_environment()
+
+            # 向后兼容：使用旧的环境变量构建逻辑
+            return self._build_environment_legacy(job)
+
+        except Exception as e:
+            self.logger.warning(f"使用新架构构建环境变量失败，回退到旧架构: {str(e)}")
+            return self._build_environment_legacy(job)
+
+    def _build_environment_legacy(self, job: TrainingJob) -> dict[str, str]:
+        """构建环境变量 - 旧的实现（向后兼容）"""
         env = os.environ.copy()
 
         # 设置GPU环境变量
@@ -737,6 +803,10 @@ class TrainingService:
             env["NCCL_P2P_DISABLE"] = "1"
             env["NCCL_IB_DISABLE"] = "1"
             env["NPROC_PER_NODE"] = str(len(job.gpu_id.split(",")))
+
+        # 根据任务类型设置特定环境变量
+        if job.task_type in ["multimodal", "mllm"]:
+            env["VISION_MODEL_ENABLED"] = "1"
 
         return env
 

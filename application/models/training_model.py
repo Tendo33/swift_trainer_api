@@ -2,13 +2,22 @@
 # 本文件已归并自 application/config/training_config.py
 # 包含所有训练配置、参数、管理器、类型定义
 # 归并时间：2024-xx-xx
+# 重构时间：2024-12-19 - 支持基类分离架构
 # =============================================
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
+
+# 导入新的训练器基类和参数类型
+from .base_trainer import (
+    BaseTrainingParams,
+    LLMTrainingParams,
+    MLLMTrainingParams,
+    TrainerType,
+)
 
 
 class TrainingStatus(str, Enum):
@@ -23,9 +32,11 @@ class TrainingStatus(str, Enum):
 
 # 保留唯一的 TrainingTaskType（如有差异以 config 版本为准）
 class TrainingTaskType(str, Enum):
-    MULTIMODAL = "multimodal"
-    LANGUAGE_MODEL = "language_model"
-    DEPLOY = "deploy"
+    MULTIMODAL = "multimodal"  # 保留向后兼容
+    LANGUAGE_MODEL = "language_model"  # 保留向后兼容
+    DEPLOY = "deploy"  # 保留向后兼容
+    LLM = "llm"  # 新的LLM训练类型
+    MLLM = "mllm"  # 新的MLLM训练类型
 
 
 # 只保留参数、任务、响应等数据结构
@@ -72,8 +83,16 @@ class TrainingJobCreateRequest(BaseModel):
     priority: int = Field(
         default=0, ge=0, le=10, description="任务优先级，0-10，数字越大优先级越高"
     )
-    train_params: Optional[TrainingHyperParams] = Field(
-        default=None, description="训练超参数"
+    # 兼容旧的参数格式
+    train_params: Optional[
+        Union[TrainingHyperParams, LLMTrainingParams, MLLMTrainingParams]
+    ] = Field(default=None, description="训练超参数（支持多种参数类型）")
+    # 新的特定参数字段
+    llm_params: Optional[LLMTrainingParams] = Field(
+        default=None, description="LLM训练专用参数"
+    )
+    mllm_params: Optional[MLLMTrainingParams] = Field(
+        default=None, description="MLLM训练专用参数"
     )
 
 
@@ -97,10 +116,12 @@ class TrainingJob(BaseModel):
     model_path: str = Field(..., description="模型路径")
     output_dir: str = Field(..., description="输出目录")
 
-    # 训练配置
-    train_params: Optional[TrainingHyperParams] = Field(
-        default=None, description="训练超参数"
-    )
+    # 训练配置（支持多种参数类型）
+    train_params: Optional[
+        Union[TrainingHyperParams, LLMTrainingParams, MLLMTrainingParams]
+    ] = Field(default=None, description="训练超参数（支持多种参数类型）")
+    # 训练器类型
+    trainer_type: Optional[TrainerType] = Field(default=None, description="训练器类型")
     num_epochs: int = Field(default=1, description="训练轮数")
     batch_size: int = Field(default=1, description="批次大小")
     learning_rate: float = Field(default=1e-4, description="学习率")
@@ -139,6 +160,34 @@ class TrainingJob(BaseModel):
     export_time: Optional[float] = Field(default=None, description="导出时间(秒)")
     export_path: Optional[str] = Field(default=None, description="导出模型路径")
     export_error: Optional[str] = Field(default=None, description="导出错误信息")
+
+    def get_effective_params(self) -> Optional[BaseTrainingParams]:
+        """获取有效的训练参数"""
+        if isinstance(self.train_params, (LLMTrainingParams, MLLMTrainingParams)):
+            return self.train_params
+        return None
+
+    def get_effective_trainer_type(self) -> Optional[TrainerType]:
+        """获取有效的训练器类型"""
+        if self.trainer_type:
+            return self.trainer_type
+
+        # 根据任务类型推断训练器类型
+        if self.task_type == TrainingTaskType.LLM:
+            return TrainerType.LLM
+        elif self.task_type == TrainingTaskType.MLLM:
+            return TrainerType.MLLM
+        elif self.task_type in [
+            TrainingTaskType.MULTIMODAL,
+            TrainingTaskType.LANGUAGE_MODEL,
+        ]:
+            # 向后兼容
+            if isinstance(self.train_params, MLLMTrainingParams):
+                return TrainerType.MLLM
+            else:
+                return TrainerType.LLM
+
+        return None
 
 
 class TrainingJobResponse(BaseModel):
@@ -229,3 +278,74 @@ class TrainingJobQueuedResponse(BaseModel):
     message: str = Field(..., description="响应消息")
     queue_position: Optional[int] = Field(default=None, description="队列位置")
     estimated_wait_time: Optional[str] = Field(default=None, description="预计等待时间")
+
+
+# 参数转换辅助函数
+def resolve_training_params(
+    request: TrainingJobCreateRequest,
+) -> Optional[BaseTrainingParams]:
+    """解析训练参数，优先使用特定参数"""
+
+    # 优先使用特定参数
+    if request.task_type == TrainingTaskType.LLM and request.llm_params:
+        return request.llm_params
+    elif request.task_type == TrainingTaskType.MLLM and request.mllm_params:
+        return request.mllm_params
+
+    # 检查train_params中是否包含特定参数类型
+    if request.train_params:
+        if isinstance(request.train_params, (LLMTrainingParams, MLLMTrainingParams)):
+            return request.train_params
+
+        # 如果是旧的TrainingHyperParams，尝试转换
+        if isinstance(request.train_params, TrainingHyperParams):
+            params_dict = request.train_params.model_dump(exclude_none=True)
+
+            # 根据任务类型转换参数
+            if request.task_type in [
+                TrainingTaskType.LLM,
+                TrainingTaskType.LANGUAGE_MODEL,
+            ]:
+                return LLMTrainingParams(**params_dict)
+            elif request.task_type in [
+                TrainingTaskType.MLLM,
+                TrainingTaskType.MULTIMODAL,
+            ]:
+                # 为MLLM参数添加默认的vit_lr和aligner_lr
+                if "vit_lr" not in params_dict:
+                    params_dict["vit_lr"] = 1e-5
+                if "aligner_lr" not in params_dict:
+                    params_dict["aligner_lr"] = 1e-5
+                return MLLMTrainingParams(**params_dict)
+
+    # 返回默认参数
+    if request.task_type in [TrainingTaskType.LLM, TrainingTaskType.LANGUAGE_MODEL]:
+        return LLMTrainingParams()
+    elif request.task_type in [TrainingTaskType.MLLM, TrainingTaskType.MULTIMODAL]:
+        return MLLMTrainingParams()
+
+    return None
+
+
+def determine_trainer_type(request: TrainingJobCreateRequest) -> Optional[TrainerType]:
+    """确定训练器类型"""
+
+    # 显式指定的训练器类型
+    if request.task_type == TrainingTaskType.LLM:
+        return TrainerType.LLM
+    elif request.task_type == TrainingTaskType.MLLM:
+        return TrainerType.MLLM
+
+    # 根据参数类型推断
+    if request.llm_params or isinstance(request.train_params, LLMTrainingParams):
+        return TrainerType.LLM
+    elif request.mllm_params or isinstance(request.train_params, MLLMTrainingParams):
+        return TrainerType.MLLM
+
+    # 向后兼容
+    if request.task_type == TrainingTaskType.LANGUAGE_MODEL:
+        return TrainerType.LLM
+    elif request.task_type == TrainingTaskType.MULTIMODAL:
+        return TrainerType.MLLM
+
+    return None

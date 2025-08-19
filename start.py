@@ -17,7 +17,6 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 
-
 logger = get_system_logger()
 
 
@@ -26,10 +25,10 @@ def main():
     logger.info("=" * 50)
     logger.info("Swift Trainer API 启动中...")
     logger.info("=" * 50)
-    
+
     # 检查必要的目录
     os.makedirs(settings.LOG_DIR, exist_ok=True)
-    
+
     logger.info(f"日志目录: {settings.LOG_DIR}")
     print_config_info()
     # 启动服务器
@@ -39,9 +38,9 @@ def main():
         port=settings.APP_PORT,
         reload=False,
         log_level=settings.LOG_LEVEL.lower(),
-        access_log=True
+        access_log=True,
     )
 
 
 if __name__ == "__main__":
-    main() 
+    main()
