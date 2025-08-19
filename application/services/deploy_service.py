@@ -1,4 +1,5 @@
 import os
+import psutil
 import subprocess
 import uuid
 from datetime import datetime
@@ -125,7 +126,7 @@ class DeployService:
             raise ValueError(f"部署任务 {job_id} 状态不正确: {job.status}")
         if job.process_id:
             try:
-                import psutil
+                # psutil imported at top level
 
                 p = psutil.Process(job.process_id)
                 p.terminate()

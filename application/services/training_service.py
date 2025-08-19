@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -36,8 +37,9 @@ class TrainingService:
     def create_training_job(self, request: TrainingJobCreateRequest) -> TrainingJob:
         """创建训练任务，支持多任务类型"""
         try:
-            # 自动分配1个GPU
-            gpu_id_list = self._auto_allocate_gpus(1)
+            # 根据配置自动分配GPU
+            gpu_count = self.training_handler.get_gpu_count_for_task(request)
+            gpu_id_list = self._auto_allocate_gpus(gpu_count)
 
             if request.task_type == "multimodal":
                 job_kwargs = self.training_handler.handle_multimodal(
@@ -46,6 +48,11 @@ class TrainingService:
                 job = TrainingJob(**job_kwargs)
             elif request.task_type == "language_model":
                 job_kwargs = self.training_handler.handle_language_model(
+                    request, gpu_id_list
+                )
+                job = TrainingJob(**job_kwargs)
+            elif request.task_type == "deploy":
+                job_kwargs = self.training_handler.handle_deploy(
                     request, gpu_id_list
                 )
                 job = TrainingJob(**job_kwargs)
@@ -839,7 +846,7 @@ class TrainingService:
     def _parse_training_progress(self, job_id: str, line: str, training_logger):
         """解析训练进度 - 使用批量更新优化"""
         try:
-            import re
+            # re imported at top level
 
             # 初始化更新字典
             updates = {}
