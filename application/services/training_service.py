@@ -101,9 +101,15 @@ class TrainingService:
                 self.logger.info(f"创建训练任务 {job.id}")
                 return job
 
-        except Exception as e:
-            self.logger.error(f"创建训练任务失败: {str(e)}")
+        except (ValueError, KeyError) as e:
+            self.logger.error(f"创建训练任务参数错误: {str(e)}")
             raise
+        except (ConnectionError, TimeoutError) as e:
+            self.logger.error(f"创建训练任务时服务连接失败: {str(e)}")
+            raise RuntimeError(f"服务连接失败: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"创建训练任务失败: {str(e)}", exc_info=True)
+            raise RuntimeError(f"创建训练任务失败: {str(e)}")
 
     def start_training(self, job_id: str) -> bool:
         """启动训练任务"""
@@ -494,11 +500,11 @@ class TrainingService:
                     self.logger.info(f"队列处理器启动了 {result['started']} 个任务")
 
                 # 等待一段时间再处理下一个任务
-                time.sleep(30)  # 30秒检查一次
+                time.sleep(settings.QUEUE_CHECK_INTERVAL)  # 使用配置的检查间隔
 
             except Exception as e:
                 self.logger.error(f"队列处理器循环出错: {str(e)}")
-                time.sleep(60)  # 出错时等待更长时间
+                time.sleep(settings.QUEUE_CHECK_INTERVAL * 2)  # 出错时等待更长时间
 
         self.logger.info("GPU队列处理器已停止")
 

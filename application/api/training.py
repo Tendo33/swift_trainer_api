@@ -68,9 +68,15 @@ async def create_training_job(request: TrainingJobCreateRequest):
     except ValueError as e:
         logger.warning(f"创建训练任务参数错误: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"创建训练任务时服务连接失败: {str(e)}")
+        raise HTTPException(status_code=503, detail="服务暂时不可用，请稍后重试")
+    except RuntimeError as e:
+        logger.error(f"创建训练任务时运行时错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        logger.error(f"创建训练任务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建训练任务失败: {str(e)}")
+        logger.error(f"创建训练任务失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="创建训练任务失败，请检查日志")
 
 
 @training_job_router.post(

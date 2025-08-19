@@ -1,6 +1,7 @@
 import subprocess
 from typing import Dict, List, Optional
 
+from application.config import settings
 from application.utils.logger import get_system_logger
 
 logger = get_system_logger()
@@ -11,9 +12,9 @@ class GPUManager:
 
     def __init__(self):
         self.logger = logger
-        # GPU可用性检查的配置参数
-        self.memory_usage_threshold = 0.3  # 内存使用率阈值30%
-        self.memory_free_threshold_gb = 20  # 空闲内存阈值20GB
+        # GPU可用性检查的配置参数 - 从配置中读取
+        self.memory_usage_threshold = settings.GPU_MEMORY_THRESHOLD
+        self.memory_free_threshold_gb = settings.GPU_MEMORY_FREE_THRESHOLD_GB
 
     def _run_nvidia_smi(self, query: str) -> Optional[str]:
         """执行nvidia-smi命令的通用方法"""
@@ -130,11 +131,26 @@ class GPUManager:
     def kill_gpu_process(self, pid: int) -> bool:
         """终止指定进程"""
         try:
-            subprocess.run(["kill", "-9", str(pid)], check=True)
-            self.logger.info(f"成功终止进程 {pid}")
-            return True
-        except subprocess.CalledProcessError:
-            self.logger.error(f"终止进程 {pid} 失败")
+            # 验证PID是否有效
+            if not isinstance(pid, int) or pid <= 0:
+                self.logger.warning(f"无效的进程ID: {pid}")
+                return False
+            
+            # 先尝试优雅终止
+            try:
+                subprocess.run(["kill", str(pid)], check=True, timeout=5)
+                self.logger.info(f"成功终止进程 {pid}")
+                return True
+            except subprocess.TimeoutExpired:
+                # 优雅终止失败，强制终止
+                subprocess.run(["kill", "-9", str(pid)], check=True, timeout=5)
+                self.logger.info(f"强制终止进程 {pid}")
+                return True
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"终止进程 {pid} 失败: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"终止进程 {pid} 时发生未知错误: {e}")
             return False
 
     def get_gpu_count(self) -> int:
@@ -152,13 +168,14 @@ class GPUManager:
 
     def validate_gpu_ids(self, gpu_ids: str) -> bool:
         """验证GPU ID列表格式"""
-        if not gpu_ids:
+        if not gpu_ids or not gpu_ids.strip():
             return False
 
         try:
             ids = gpu_ids.split(",")
             return all(self.validate_gpu_id(gpu_id.strip()) for gpu_id in ids)
-        except Exception:
+        except (AttributeError, ValueError) as e:
+            self.logger.warning(f"GPU ID格式验证失败: {gpu_ids}, 错误: {e}")
             return False
 
 

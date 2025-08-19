@@ -46,6 +46,12 @@ class RedisService:
             self.redis_client.setex(key, 86400 * 30, job_data)  # 保存30天
             # self.logger.info(f"保存训练任务 {job.id} 到Redis")
             return True
+        except (ConnectionError, TimeoutError) as e:
+            self.logger.error(f"Redis连接失败，无法保存训练任务 {job.id}: {str(e)}")
+            return False
+        except (ValueError, TypeError) as e:
+            self.logger.error(f"训练任务数据序列化失败 {job.id}: {str(e)}")
+            return False
         except Exception as e:
             self.logger.error(f"保存训练任务失败 {job.id}: {str(e)}", exc_info=True)
             return False

@@ -1,6 +1,7 @@
 import inspect
 import os
 import sys
+from datetime import datetime
 
 from loguru import logger
 
@@ -87,11 +88,15 @@ class TrainingLogger:
                 "caller_file": filename,
                 "caller_function": function,
                 "caller_line": line,
+                "timestamp": datetime.now().isoformat(),
                 **kwargs,
             }
             redis_service.save_training_log(self.job_id, log_entry)
+        except (ImportError, ConnectionError) as e:
+            # 如果Redis连接失败，不影响文件日志记录
+            logger.warning(f"Redis连接失败，跳过日志保存: {e}")
         except Exception as e:
-            # 如果Redis保存失败，不影响文件日志记录
+            # 其他异常也记录但不影响主流程
             logger.error(f"保存日志到Redis失败: {str(e)}")
 
     def info(self, message: str, **kwargs):
