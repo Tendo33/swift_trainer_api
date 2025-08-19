@@ -107,25 +107,26 @@ settings = Settings()
 # 打印配置信息
 def print_config_info():
     """打印配置文件和配置信息"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     env_file_path = f"env/.env.{os.getenv('ENVIRONMENT', 'dev')}"
-    print("=== 配置文件信息 ===")
-    print(f"读取的配置文件: {env_file_path}")
-    print(f"配置文件是否存在: {os.path.exists(env_file_path)}")
-    print(f"当前环境: {settings.ENVIRONMENT}")
-    print()
-
-    print("=== 配置项详情 ===")
-    print(f"ENVIRONMENT: {settings.ENVIRONMENT}")
-    print(f"REDIS_HOST: {settings.REDIS_HOST}")
-    print(f"REDIS_PORT: {settings.REDIS_PORT}")
-    print(f"REDIS_DB: {settings.REDIS_DB}")
-    print(f"REDIS_PASSWORD: {'***' if settings.REDIS_PASSWORD else 'None'}")
-    print(f"LOG_LEVEL: {settings.LOG_LEVEL}")
-    print(f"LOG_DIR: {settings.LOG_DIR}")
-    print(f"API_PREFIX: {settings.API_PREFIX}")
-    print(f"APP_HOST: {settings.APP_HOST}")
-    print(f"APP_PORT: {settings.APP_PORT}")
-    print("=" * 50)
+    logger.info("=== 配置文件信息 ===")
+    logger.info(f"读取的配置文件: {env_file_path}")
+    logger.info(f"配置文件是否存在: {os.path.exists(env_file_path)}")
+    logger.info(f"当前环境: {settings.ENVIRONMENT}")
+    logger.info("=== 配置项详情 ===")
+    logger.info(f"ENVIRONMENT: {settings.ENVIRONMENT}")
+    logger.info(f"REDIS_HOST: {settings.REDIS_HOST}")
+    logger.info(f"REDIS_PORT: {settings.REDIS_PORT}")
+    logger.info(f"REDIS_DB: {settings.REDIS_DB}")
+    logger.info(f"REDIS_PASSWORD: {'***' if settings.REDIS_PASSWORD else 'None'}")
+    logger.info(f"LOG_LEVEL: {settings.LOG_LEVEL}")
+    logger.info(f"LOG_DIR: {settings.LOG_DIR}")
+    logger.info(f"API_PREFIX: {settings.API_PREFIX}")
+    logger.info(f"APP_HOST: {settings.APP_HOST}")
+    logger.info(f"APP_PORT: {settings.APP_PORT}")
+    logger.info("=" * 50)
 
 
 # 确保必要的目录存在

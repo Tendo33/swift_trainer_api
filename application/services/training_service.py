@@ -7,13 +7,13 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from application.config import settings
 from application.models.training_model import (
     TrainingJob,
     TrainingJobCreateRequest,
     TrainingStatus,
 )
 from application.services.redis_service import get_redis_service
+from application.setting import settings
 from application.utils.gpu_utils import get_gpu_manager
 from application.utils.logger import get_system_logger, get_training_logger
 

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from loguru import logger
 
-from application.config import settings
+from application.setting import settings
 
 
 class TrainingLogger:

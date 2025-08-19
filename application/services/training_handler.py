@@ -1,31 +1,24 @@
-from typing import Dict, Any, Optional, Union
-from application.config.training_config import (
-    TrainingConfiguration, 
-    TrainingConfigManager, 
+from typing import Any, Dict
+
+from application.models.training_model import (
+    TrainingConfigManager,
+    TrainingConfiguration,
     TrainingTaskType,
-    TrainingProfile
 )
-from application.config import settings
+from application.setting import settings
 
 
 class TrainingHandler:
     """训练任务处理器，负责处理不同类型的训练任务参数"""
     
-    def __init__(self, default_profile: TrainingProfile = TrainingProfile.DEFAULT):
-        self.default_profile = default_profile
+    def __init__(self):
         self._config_cache: Dict[str, TrainingConfiguration] = {}
     
-    def _get_config(self, profile: Optional[TrainingProfile] = None) -> TrainingConfiguration:
+    def _get_config(self) -> TrainingConfiguration:
         """获取配置，支持缓存和环境感知"""
-        profile = profile or self.default_profile
-        profile_key = f"{profile.value}_{settings.ENVIRONMENT}"
-        
-        if profile_key not in self._config_cache:
-            self._config_cache[profile_key] = TrainingConfigManager.get_profile_config_with_env(
-                profile, settings.ENVIRONMENT
-            )
-        
-        return self._config_cache[profile_key]
+        if "default" not in self._config_cache:
+            self._config_cache["default"] = TrainingConfigManager.get_profile_config_with_env(settings.ENVIRONMENT)
+        return self._config_cache["default"]
     
     def _extract_params(self, request) -> dict:
         """提取请求参数"""
@@ -53,24 +46,13 @@ class TrainingHandler:
         except ValueError:
             raise ValueError(f"不支持的任务类型: {task_type_str}")
     
-    def _extract_profile_from_params(self, params: dict) -> Optional[TrainingProfile]:
-        """从参数中提取配置预设"""
-        profile_str = params.get("profile")
-        if profile_str:
-            try:
-                return TrainingProfile(profile_str)
-            except ValueError:
-                pass
-        return None
-    
     def handle_multimodal(self, request, gpu_id_list) -> dict:
         """处理多模态训练任务"""
         params = self._extract_params(request)
         base_kwargs = self._build_base_kwargs(request, gpu_id_list, params)
         
         # 获取配置
-        profile = self._extract_profile_from_params(params)
-        config = self._get_config(profile)
+        config = self._get_config()
         
         # 合并配置和请求参数
         task_config = config.merge_with_request(params, TrainingTaskType.MULTIMODAL)
@@ -78,7 +60,7 @@ class TrainingHandler:
         # 移除配置相关的参数，只保留训练参数
         training_kwargs = {**base_kwargs}
         for key, value in task_config.items():
-            if key not in ["profile", "description"]:
+            if key != "description":
                 training_kwargs[key] = value
         
         return training_kwargs
@@ -89,8 +71,7 @@ class TrainingHandler:
         base_kwargs = self._build_base_kwargs(request, gpu_id_list, params)
         
         # 获取配置
-        profile = self._extract_profile_from_params(params)
-        config = self._get_config(profile)
+        config = self._get_config()
         
         # 合并配置和请求参数
         task_config = config.merge_with_request(params, TrainingTaskType.LANGUAGE_MODEL)
@@ -109,8 +90,7 @@ class TrainingHandler:
         base_kwargs = self._build_base_kwargs(request, gpu_id_list, params)
         
         # 获取配置
-        profile = self._extract_profile_from_params(params)
-        config = self._get_config(profile)
+        config = self._get_config()
         
         # 合并配置和请求参数
         task_config = config.merge_with_request(params, TrainingTaskType.DEPLOY)
@@ -126,8 +106,7 @@ class TrainingHandler:
     def get_gpu_count_for_task(self, request) -> int:
         """获取任务需要的GPU数量"""
         params = self._extract_params(request)
-        profile = self._extract_profile_from_params(params)
-        config = self._get_config(profile)
+        config = self._get_config()
         
         # 优先使用请求中的GPU数量
         if "gpu_count" in params:
@@ -142,15 +121,15 @@ class TrainingHandler:
     
     def get_available_profiles(self) -> list:
         """获取可用的配置预设"""
-        return [profile.value for profile in TrainingProfile]
+        return ["default"] # 不再区分 profile
     
-    def get_profile_info(self, profile: TrainingProfile) -> dict:
+    def get_profile_info(self, profile: str) -> dict:
         """获取配置预设信息"""
-        config = self._get_config(profile)
+        config = self._get_config()
         return {
-            "profile": profile.value,
+            "profile": "default", # 不再区分 profile
             "environment": settings.ENVIRONMENT,
-            "description": config.description or f"预设配置: {profile.value}",
+            "description": config.description or "默认配置",
             "gpu_count": config.base.gpu_count,
             "base_config": config.base.model_dump(),
             "multimodal_config": config.multimodal.model_dump() if config.multimodal else None,
@@ -171,11 +150,11 @@ class TrainingHandler:
         self._config_cache.clear()
         return {"message": "配置缓存已刷新", "cleared_count": len(self._config_cache)}
     
-    def update_runtime_config(self, profile: TrainingProfile, updates: Dict[str, Any]) -> Dict[str, Any]:
+    def update_runtime_config(self, profile: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         """运行时更新配置"""
         try:
             # 获取当前配置
-            current_config = self._get_config(profile)
+            current_config = self._get_config()
             
             # 创建更新的配置
             config_dict = current_config.model_dump()
@@ -194,7 +173,7 @@ class TrainingHandler:
             new_config = TrainingConfiguration(**config_dict)
             
             # 更新缓存
-            profile_key = f"{profile.value}_{settings.ENVIRONMENT}"
+            profile_key = "default" # 不再区分 profile
             self._config_cache[profile_key] = new_config
             
             return {
@@ -209,41 +188,4 @@ class TrainingHandler:
                 "success": False,
                 "message": f"运行时配置更新失败: {str(e)}",
                 "error": str(e)
-            }
-    
-    def get_config_diff(self, profile: TrainingProfile, base_profile: TrainingProfile = TrainingProfile.DEFAULT) -> Dict[str, Any]:
-        """获取配置差异"""
-        try:
-            config1 = self._get_config(profile)
-            config2 = self._get_config(base_profile)
-            
-            def dict_diff(dict1: dict, dict2: dict) -> dict:
-                diff = {}
-                for key in dict1:
-                    if key not in dict2:
-                        diff[key] = dict1[key]
-                    elif dict1[key] != dict2[key]:
-                        if isinstance(dict1[key], dict) and isinstance(dict2[key], dict):
-                            sub_diff = dict_diff(dict1[key], dict2[key])
-                            if sub_diff:
-                                diff[key] = sub_diff
-                        else:
-                            diff[key] = dict1[key]
-                return diff
-            
-            config1_dict = config1.model_dump()
-            config2_dict = config2.model_dump()
-            
-            return {
-                "profile1": profile.value,
-                "profile2": base_profile.value,
-                "differences": dict_diff(config1_dict, config2_dict),
-                "environment": settings.ENVIRONMENT
-            }
-            
-        except Exception as e:
-            return {
-                "error": f"获取配置差异失败: {str(e)}",
-                "profile1": profile.value,
-                "profile2": base_profile.value
             }

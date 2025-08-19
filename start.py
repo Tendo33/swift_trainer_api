@@ -8,7 +8,8 @@ import sys
 from pathlib import Path
 
 import uvicorn
-from application.config import print_config_info, settings
+
+from application.setting import print_config_info, settings
 from application.utils.logger import get_system_logger
 
 # 添加项目根目录到Python路径

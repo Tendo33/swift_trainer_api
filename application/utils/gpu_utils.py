@@ -1,7 +1,7 @@
 import subprocess
 from typing import Dict, List, Optional
 
-from application.config import settings
+from application.setting import settings
 from application.utils.logger import get_system_logger
 
 logger = get_system_logger()

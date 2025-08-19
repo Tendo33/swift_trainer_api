@@ -4,9 +4,9 @@ from typing import Any, Dict, List, Optional
 
 import redis
 
-from application.config import settings
 from application.models.deploy_model import DeployJob
 from application.models.training_model import TrainingJob, TrainingStatus
+from application.setting import settings
 from application.utils.gpu_utils import get_gpu_manager
 from application.utils.logger import get_system_logger
 

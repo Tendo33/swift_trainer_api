@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from application.api.training import router as training_router
-from application.config import settings
+from application.setting import settings
 from application.utils.logger import get_system_logger
 
 logger = get_system_logger()
