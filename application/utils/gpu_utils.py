@@ -1,5 +1,4 @@
 import subprocess
-from typing import Dict, List, Optional
 
 from application.setting import settings
 from application.utils.logger import get_system_logger
@@ -10,13 +9,13 @@ logger = get_system_logger()
 class GPUManager:
     """GPU资源管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = logger
         # GPU可用性检查的配置参数 - 从配置中读取
         self.memory_usage_threshold = settings.GPU_MEMORY_THRESHOLD
         self.memory_free_threshold_gb = settings.GPU_MEMORY_FREE_THRESHOLD_GB
 
-    def _run_nvidia_smi(self, query: str) -> Optional[str]:
+    def _run_nvidia_smi(self, query: str) -> str | None:
         """执行nvidia-smi命令的通用方法"""
         try:
             result = subprocess.run(
@@ -39,7 +38,7 @@ class GPUManager:
             self.logger.error(f"nvidia-smi命令执行异常: {str(e)}")
             return None
 
-    def get_gpu_info(self) -> List[Dict]:
+    def get_gpu_info(self) -> list[dict]:
         """获取所有GPU信息"""
         query = "index,name,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu"
         output = self._run_nvidia_smi(query)
@@ -65,7 +64,7 @@ class GPUManager:
 
         return gpus
 
-    def _is_gpu_available_by_info(self, gpu_info: Dict) -> bool:
+    def _is_gpu_available_by_info(self, gpu_info: dict) -> bool:
         """根据GPU信息判断是否可用（内部方法）"""
         memory_usage_ratio = gpu_info["memory_used"] / gpu_info["memory_total"]
         memory_free_gb = gpu_info["memory_free"] / 1024  # 转换为GB
@@ -83,14 +82,14 @@ class GPUManager:
                 return self._is_gpu_available_by_info(gpu)
         return False
 
-    def get_available_gpus(self) -> List[str]:
+    def get_available_gpus(self) -> list[str]:
         """获取所有可用的GPU ID列表"""
         gpus = self.get_gpu_info()
         return [
             str(gpu["index"]) for gpu in gpus if self._is_gpu_available_by_info(gpu)
         ]
 
-    def get_gpu_memory_usage(self, gpu_id: str) -> Optional[Dict]:
+    def get_gpu_memory_usage(self, gpu_id: str) -> dict | None:
         """获取指定GPU的内存使用情况"""
         gpus = self.get_gpu_info()
         for gpu in gpus:
@@ -105,7 +104,7 @@ class GPUManager:
                 }
         return None
 
-    def get_gpu_processes(self) -> List[Dict]:
+    def get_gpu_processes(self) -> list[dict]:
         """获取GPU上运行的进程"""
         query = "compute-apps.gpu_uuid,compute-apps.pid,compute-apps.process_name,compute-apps.used_memory"
         output = self._run_nvidia_smi(query)
@@ -135,7 +134,7 @@ class GPUManager:
             if not isinstance(pid, int) or pid <= 0:
                 self.logger.warning(f"无效的进程ID: {pid}")
                 return False
-            
+
             # 先尝试优雅终止
             try:
                 subprocess.run(["kill", str(pid)], check=True, timeout=5)
@@ -198,7 +197,7 @@ def is_gpu_available(gpu_id: str) -> bool:
     return gpu_manager.check_gpu_availability(gpu_id)
 
 
-def get_available_gpus() -> List[str]:
+def get_available_gpus() -> list[str]:
     """获取所有可用的GPU ID列表"""
     return gpu_manager.get_available_gpus()
 

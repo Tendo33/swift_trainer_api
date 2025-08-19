@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import redis
 
@@ -16,7 +16,7 @@ logger = get_system_logger()
 class RedisService:
     """Redis服务类，用于管理训练任务状态和缓存"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.redis_client = redis.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
@@ -56,7 +56,7 @@ class RedisService:
             self.logger.error(f"保存训练任务失败 {job.id}: {str(e)}", exc_info=True)
             return False
 
-    def get_training_job(self, job_id: str) -> Optional[TrainingJob]:
+    def get_training_job(self, job_id: str) -> TrainingJob | None:
         """从Redis获取训练任务"""
         try:
             key = f"training_job:{job_id}"
@@ -74,7 +74,7 @@ class RedisService:
             self.logger.error(f"获取训练任务失败 {job_id}: {str(e)}", exc_info=True)
             return None
 
-    def update_training_job(self, job_id: str, **kwargs) -> bool:
+    def update_training_job(self, job_id: str, **kwargs: Any) -> bool:
         """更新训练任务"""
         try:
             job = self.get_training_job(job_id)
@@ -106,7 +106,7 @@ class RedisService:
             self.logger.error(f"删除训练任务失败 {job_id}: {str(e)}", exc_info=True)
             return False
 
-    def delete_all_training_jobs(self) -> Dict[str, Any]:
+    def delete_all_training_jobs(self) -> dict[str, Any]:
         """删除所有训练任务"""
         try:
             pattern = "training_job:*"
@@ -264,7 +264,9 @@ class RedisService:
             self.logger.error(f"获取训练日志失败 {job_id}: {str(e)}", exc_info=True)
             return []
 
-    def save_training_progress(self, job_id: str, progress: float, **kwargs) -> bool:
+    def save_training_progress(
+        self, job_id: str, progress: float, **kwargs: Any
+    ) -> bool:
         """保存训练进度"""
         try:
             key = f"training_progress:{job_id}"
@@ -280,7 +282,7 @@ class RedisService:
             self.logger.error(f"保存训练进度失败 {job_id}: {str(e)}", exc_info=True)
             return False
 
-    def get_training_progress(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def get_training_progress(self, job_id: str) -> Dict[str, Any] | None:
         """获取训练进度"""
         try:
             key = f"training_progress:{job_id}"
@@ -299,7 +301,7 @@ class RedisService:
             return None
 
     def set_gpu_status(
-        self, gpu_id: str, status: str, job_id: Optional[str] = None
+        self, gpu_id: str, status: str, job_id: str | None = None
     ) -> bool:
         """设置GPU状态"""
         try:
@@ -316,7 +318,7 @@ class RedisService:
             self.logger.error(f"设置GPU状态失败 {gpu_id}: {str(e)}", exc_info=True)
             return False
 
-    def get_gpu_status(self, gpu_id: str) -> Optional[Dict[str, Any]]:
+    def get_gpu_status(self, gpu_id: str) -> Dict[str, Any] | None:
         """获取GPU状态"""
         try:
             key = f"gpu_status:{gpu_id}"
@@ -353,7 +355,7 @@ class RedisService:
             return {}
 
     def add_training_event(
-        self, job_id: str, event_type: str, message: str, **kwargs
+        self, job_id: str, event_type: str, message: str, **kwargs: Any
     ) -> bool:
         """添加训练事件"""
         try:
@@ -438,7 +440,7 @@ class RedisService:
             self.logger.error(f"添加任务到GPU队列失败 {job_id}: {str(e)}")
             return False
 
-    def get_job_from_gpu_queue(self) -> Optional[Dict[str, Any]]:
+    def get_job_from_gpu_queue(self) -> Dict[str, Any] | None:
         """从GPU队列获取下一个可执行的任务"""
         try:
             # 获取队列中优先级最高的任务
@@ -546,18 +548,18 @@ class RedisService:
                 "can_start": False,
             }
 
-    def save_deploy_job(self, job: DeployJob):
+    def save_deploy_job(self, job: DeployJob) -> None:
         key = f"deploy:job:{job.id}"
         self.redis_client.set(key, job.json())
 
-    def get_deploy_job(self, job_id: str) -> Optional[DeployJob]:
+    def get_deploy_job(self, job_id: str) -> DeployJob | None:
         key = f"deploy:job:{job_id}"
         data = self.redis_client.get(key)
         if data:
             return DeployJob.model_validate_json(data)
         return None
 
-    def add_deploy_event(self, job_id: str, event_type: str, message: str):
+    def add_deploy_event(self, job_id: str, event_type: str, message: str) -> None:
         key = f"deploy:event:{job_id}"
         event = {
             "type": event_type,
@@ -566,7 +568,7 @@ class RedisService:
         }
         self.redis_client.rpush(key, json.dumps(event))
 
-    def add_job_to_deploy_queue(self, job_id: str, port: int, priority: int):
+    def add_job_to_deploy_queue(self, job_id: str, port: int, priority: int) -> None:
         queue_key = "deploy:queue"
         queue_data = json.dumps(
             {
@@ -578,12 +580,12 @@ class RedisService:
         )
         self.redis_client.rpush(queue_key, queue_data)
 
-    def get_deploy_queue_status(self) -> Dict[str, Any]:
+    def get_deploy_queue_status(self) -> List[Dict[str, Any]]:
         queue_key = "deploy:queue"
         items = self.redis_client.lrange(queue_key, 0, -1)
         return [json.loads(item) for item in items]
 
-    def remove_job_from_deploy_queue(self, job_id: str):
+    def remove_job_from_deploy_queue(self, job_id: str) -> bool:
         queue_key = "deploy:queue"
         items = self.redis_client.lrange(queue_key, 0, -1)
         for item in items:

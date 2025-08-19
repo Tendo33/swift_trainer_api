@@ -11,7 +11,7 @@ from application.setting import settings
 class TrainingLogger:
     """训练日志管理器"""
 
-    def __init__(self, job_id: str):
+    def __init__(self, job_id: str) -> None:
         self.job_id = job_id
         self.log_file_path = os.path.join(settings.LOG_DIR, f"training_{job_id}.log")
         self.json_log_file_path = os.path.join(
@@ -21,7 +21,7 @@ class TrainingLogger:
         # 配置日志记录器
         self._setup_logger()
 
-    def _setup_logger(self):
+    def _setup_logger(self) -> None:
         """设置日志记录器"""
         # 移除默认的日志处理器
         logger.remove()
@@ -54,7 +54,7 @@ class TrainingLogger:
             retention="30 days",
         )
 
-    def _get_caller_info(self):
+    def _get_caller_info(self) -> tuple[str, str, int]:
         """获取调用者信息"""
         # 获取调用栈，跳过当前方法
         frame = inspect.currentframe()
@@ -72,7 +72,7 @@ class TrainingLogger:
             del frame
         return "unknown", "unknown", 0
 
-    def _save_to_redis(self, level: str, message: str, **kwargs):
+    def _save_to_redis(self, level: str, message: str, **kwargs: object) -> None:
         """保存日志到Redis"""
         try:
             # 在方法内部导入Redis服务，避免循环导入
@@ -99,7 +99,7 @@ class TrainingLogger:
             # 其他异常也记录但不影响主流程
             logger.error(f"保存日志到Redis失败: {str(e)}")
 
-    def info(self, message: str, **kwargs):
+    def info(self, message: str, **kwargs: object) -> None:
         """记录信息日志"""
         filename, function, line = self._get_caller_info()
         extra_data = {
@@ -114,7 +114,7 @@ class TrainingLogger:
         # 同时保存到Redis
         self._save_to_redis("INFO", message, **kwargs)
 
-    def warning(self, message: str, **kwargs):
+    def warning(self, message: str, **kwargs: object) -> None:
         """记录警告日志"""
         filename, function, line = self._get_caller_info()
         extra_data = {
@@ -129,7 +129,7 @@ class TrainingLogger:
         # 同时保存到Redis
         self._save_to_redis("WARNING", message, **kwargs)
 
-    def error(self, message: str, **kwargs):
+    def error(self, message: str, **kwargs: object) -> None:
         """记录错误日志"""
         filename, function, line = self._get_caller_info()
         extra_data = {
@@ -144,7 +144,7 @@ class TrainingLogger:
         # 同时保存到Redis
         self._save_to_redis("ERROR", message, **kwargs)
 
-    def debug(self, message: str, **kwargs):
+    def debug(self, message: str, **kwargs: object) -> None:
         """记录调试日志"""
         filename, function, line = self._get_caller_info()
         extra_data = {
@@ -160,8 +160,8 @@ class TrainingLogger:
         self._save_to_redis("DEBUG", message, **kwargs)
 
     def training_progress(
-        self, epoch: int, step: int, loss: float, learning_rate: float, **kwargs
-    ):
+        self, epoch: int, step: int, loss: float, learning_rate: float, **kwargs: object
+    ) -> None:
         """记录训练进度"""
         message = (
             f"Epoch {epoch}, Step {step}, Loss: {loss:.6f}, LR: {learning_rate:.2e}"
@@ -184,7 +184,9 @@ class TrainingLogger:
         # 同时保存到Redis
         self._save_to_redis("INFO", message, **kwargs)
 
-    def gpu_usage(self, gpu_id: str, memory_used: float, memory_total: float, **kwargs):
+    def gpu_usage(
+        self, gpu_id: str, memory_used: float, memory_total: float, **kwargs: object
+    ) -> None:
         """记录GPU使用情况"""
         memory_percent = (memory_used / memory_total) * 100
         message = f"GPU {gpu_id}: {memory_used:.1f}MB / {memory_total:.1f}MB ({memory_percent:.1f}%)"
@@ -206,7 +208,9 @@ class TrainingLogger:
         # 同时保存到Redis
         self._save_to_redis("INFO", message, **kwargs)
 
-    def checkpoint_saved(self, checkpoint_path: str, step: int, **kwargs):
+    def checkpoint_saved(
+        self, checkpoint_path: str, step: int, **kwargs: object
+    ) -> None:
         """记录检查点保存"""
         message = f"Checkpoint saved at step {step}: {checkpoint_path}"
         filename, function, line = self._get_caller_info()
@@ -225,7 +229,9 @@ class TrainingLogger:
         # 同时保存到Redis
         self._save_to_redis("INFO", message, **kwargs)
 
-    def training_completed(self, final_loss: float, training_time: float, **kwargs):
+    def training_completed(
+        self, final_loss: float, training_time: float, **kwargs: object
+    ) -> None:
         """记录训练完成"""
         message = f"Training completed. Final loss: {final_loss:.6f}, Time: {training_time:.2f}s"
         filename, function, line = self._get_caller_info()
@@ -244,7 +250,7 @@ class TrainingLogger:
         # 同时保存到Redis
         self._save_to_redis("INFO", message, **kwargs)
 
-    def training_failed(self, error_message: str, **kwargs):
+    def training_failed(self, error_message: str, **kwargs: object) -> None:
         """记录训练失败"""
         message = f"Training failed: {error_message}"
         filename, function, line = self._get_caller_info()
@@ -266,11 +272,11 @@ class TrainingLogger:
 class SystemLogger:
     """系统日志管理器"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.log_file_path = os.path.join(settings.LOG_DIR, "system.log")
         self._setup_logger()
 
-    def _setup_logger(self):
+    def _setup_logger(self) -> None:
         """设置系统日志记录器"""
         # 移除默认的日志处理器
         logger.remove()
@@ -293,7 +299,7 @@ class SystemLogger:
             compression="zip",
         )
 
-    def _get_caller_info(self):
+    def _get_caller_info(self) -> tuple[str, str, int]:
         """获取调用者信息"""
         # 获取调用栈，跳过当前方法
         frame = inspect.currentframe()
@@ -311,7 +317,7 @@ class SystemLogger:
             del frame
         return "unknown", "unknown", 0
 
-    def info(self, message: str, **kwargs):
+    def info(self, message: str, **kwargs: object) -> None:
         """记录信息日志"""
         filename, function, line = self._get_caller_info()
         extra_data = {
@@ -322,7 +328,7 @@ class SystemLogger:
         }
         logger.bind(**extra_data).info(message)
 
-    def warning(self, message: str, **kwargs):
+    def warning(self, message: str, **kwargs: object) -> None:
         """记录警告日志"""
         filename, function, line = self._get_caller_info()
         extra_data = {
@@ -333,7 +339,7 @@ class SystemLogger:
         }
         logger.bind(**extra_data).warning(message)
 
-    def error(self, message: str, **kwargs):
+    def error(self, message: str, **kwargs: object) -> None:
         """记录错误日志"""
         filename, function, line = self._get_caller_info()
         extra_data = {
@@ -344,7 +350,7 @@ class SystemLogger:
         }
         logger.bind(**extra_data).error(message)
 
-    def debug(self, message: str, **kwargs):
+    def debug(self, message: str, **kwargs: object) -> None:
         """记录调试日志"""
         filename, function, line = self._get_caller_info()
         extra_data = {

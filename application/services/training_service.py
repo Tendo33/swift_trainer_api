@@ -5,7 +5,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from application.models.training_model import (
     TrainingJob,
@@ -25,7 +25,7 @@ logger = get_system_logger()
 class TrainingService:
     """训练服务类，负责执行和管理Swift训练任务"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.redis_service = get_redis_service()
         self.gpu_manager = get_gpu_manager()
         self.logger = logger
@@ -52,9 +52,7 @@ class TrainingService:
                 )
                 job = TrainingJob(**job_kwargs)
             elif request.task_type == "deploy":
-                job_kwargs = self.training_handler.handle_deploy(
-                    request, gpu_id_list
-                )
+                job_kwargs = self.training_handler.handle_deploy(request, gpu_id_list)
                 job = TrainingJob(**job_kwargs)
             else:
                 raise ValueError(f"不支持的任务类型: {request.task_type}")
@@ -278,7 +276,7 @@ class TrainingService:
             self.logger.error(f"导出模型失败: {str(e)}")
             return False
 
-    def process_gpu_queue(self) -> Dict[str, Any]:
+    def process_gpu_queue(self) -> dict[str, Any]:
         """处理GPU队列，尝试启动队列中的任务"""
         try:
             result = {"processed": 0, "started": 0, "failed": 0, "details": []}
@@ -417,7 +415,7 @@ class TrainingService:
                 "details": [{"error": str(e)}],
             }
 
-    def get_queue_status(self) -> Dict[str, Any]:
+    def get_queue_status(self) -> dict[str, Any]:
         """获取GPU队列状态"""
         try:
             return self.redis_service.get_gpu_queue_status()
@@ -494,7 +492,7 @@ class TrainingService:
             self.logger.error(f"停止队列处理器失败: {str(e)}")
             return False
 
-    def _queue_processor_loop(self):
+    def _queue_processor_loop(self) -> None:
         """队列处理器主循环"""
         self.logger.info("GPU队列处理器开始运行")
 
@@ -515,7 +513,7 @@ class TrainingService:
 
         self.logger.info("GPU队列处理器已停止")
 
-    def _auto_allocate_gpus(self, gpu_count: int) -> List[str]:
+    def _auto_allocate_gpus(self, gpu_count: int) -> list[str]:
         """自动分配指定数量的GPU"""
         try:
             # 获取所有GPU信息
@@ -561,7 +559,7 @@ class TrainingService:
             self.logger.error(f"自动分配GPU失败: {str(e)}")
             raise
 
-    def get_training_status(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def get_training_status(self, job_id: str) -> dict[str, Any] | None:
         """获取训练状态"""
         try:
             job = self.redis_service.get_training_job(job_id)
@@ -626,7 +624,7 @@ class TrainingService:
             self.logger.error(f"获取训练状态失败: {str(e)}", exc_info=True)
             return None
 
-    def _build_training_command(self, job: TrainingJob) -> List[str]:
+    def _build_training_command(self, job: TrainingJob) -> list[str]:
         """构建训练命令 - 支持多任务类型"""
         if job.task_type == "multimodal":
             command = [
@@ -727,7 +725,7 @@ class TrainingService:
         else:
             raise ValueError(f"不支持的任务类型: {job.task_type}")
 
-    def _build_environment(self, job: TrainingJob) -> Dict[str, str]:
+    def _build_environment(self, job: TrainingJob) -> dict[str, str]:
         """构建环境变量"""
         env = os.environ.copy()
 
@@ -743,8 +741,8 @@ class TrainingService:
         return env
 
     def _monitor_training_process(
-        self, job_id: str, process: subprocess.Popen, training_logger
-    ):
+        self, job_id: str, process: Any, training_logger: Any
+    ) -> None:
         """监控训练进程"""
         try:
             start_time = time.time()
@@ -843,7 +841,9 @@ class TrainingService:
                     job_id, "training_failed", f"监控失败: {str(e)}"
                 )
 
-    def _parse_training_progress(self, job_id: str, line: str, training_logger):
+    def _parse_training_progress(
+        self, job_id: str, line: str, training_logger: Any
+    ) -> None:
         """解析训练进度 - 使用批量更新优化"""
         try:
             # re imported at top level
@@ -917,7 +917,9 @@ class TrainingService:
             self.logger.error(f"解析训练进度失败: {str(e)}")
             # 不影响训练进程，只记录错误
 
-    def _export_and_merge_model(self, job_id: str, job: TrainingJob, training_logger):
+    def _export_and_merge_model(
+        self, job_id: str, job: TrainingJob, training_logger: Any
+    ) -> None:
         """训练完成后自动导出和合并模型"""
         try:
             training_logger.info(f"开始执行模型导出和合并操作: {job_id}")
@@ -1005,7 +1007,7 @@ class TrainingService:
 
             # 不抛出异常，避免影响训练完成状态
 
-    def _find_latest_checkpoint(self, output_dir: str) -> Optional[str]:
+    def _find_latest_checkpoint(self, output_dir: str) -> str | None:
         """查找最新的检查点目录"""
         try:
             if not os.path.exists(output_dir):
@@ -1056,7 +1058,7 @@ class TrainingService:
             self.logger.error(f"查找检查点目录失败: {str(e)}")
             return None
 
-    def _build_export_command(self, checkpoint_dir: str) -> List[str]:
+    def _build_export_command(self, checkpoint_dir: str) -> list[str]:
         """构建模型导出命令"""
 
         command = [

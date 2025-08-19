@@ -15,7 +15,7 @@ logger = get_system_logger()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> None:
     """应用生命周期管理"""
     # 启动时执行
     logger.info("Swift Trainer API 正在启动...")
@@ -82,7 +82,9 @@ app.add_middleware(
 
 # 全局异常处理
 @app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+async def http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
     """HTTP异常处理"""
     logger.error(f"HTTP异常: {exc.status_code} - {exc.detail}")
     return JSONResponse(
@@ -96,7 +98,9 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     """请求验证异常处理"""
     logger.error(f"请求验证失败: {exc.errors()}")
     return JSONResponse(
@@ -110,7 +114,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
+async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """通用异常处理"""
     logger.error(f"未处理的异常: {str(exc)}", exc_info=True)
     return JSONResponse(
@@ -128,7 +132,7 @@ app.include_router(training_router, prefix=settings.API_PREFIX)
 
 
 @app.get("/", summary="根路径")
-async def root():
+async def root() -> dict:
     """API根路径"""
     return {
         "message": "Swift Trainer API",
@@ -139,7 +143,7 @@ async def root():
 
 
 @app.get("/info", summary="API信息")
-async def api_info():
+async def api_info() -> dict:
     """获取API详细信息"""
     return {
         "name": "Swift Trainer API",

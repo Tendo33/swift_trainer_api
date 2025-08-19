@@ -1,12 +1,14 @@
+from typing import Any
+
 from .port_allocator import PortAllocator
 
 
 class DeployHandler:
-    def __init__(self, port_list=None):
+    def __init__(self, port_list: list[int] | None = None) -> None:
         # 端口池可通过配置注入，这里用硬编码示例
         self.port_list = port_list or [8001, 8002, 8003]
 
-    def handle(self, deploy_params):
+    def handle(self, deploy_params: Any) -> int:
         allocator = PortAllocator(self.port_list)
         port = allocator.allocate()
         if not port:
