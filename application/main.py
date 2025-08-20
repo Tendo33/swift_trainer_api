@@ -8,7 +8,6 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from application.api.training import router as training_router
-from application.api.training_v2 import router as training_v2_router
 from application.setting import settings
 from application.utils.logger import get_system_logger
 
@@ -130,7 +129,6 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 # 注册路由
 app.include_router(training_router, prefix=settings.API_PREFIX)
-app.include_router(training_v2_router, prefix=settings.API_PREFIX)
 
 
 @app.get("/", summary="根路径")

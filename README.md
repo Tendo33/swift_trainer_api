@@ -32,13 +32,17 @@
 - 🚀 **Swift训练任务管理**: 完整的训练任务生命周期管理
 - 🎯 **GPU自动排队**: 智能GPU资源分配和排队机制
 - 🔄 **优先级管理**: 支持任务优先级设置（0-10）
+- 🧩 **LLM/MLLM分离架构**: 基类+继承设计，支持LLM和MLLM专用训练
+- 🏭 **工厂模式**: TrainerFactory统一管理训练器实例创建
+- 📋 **类型化参数**: LLMTrainingParams和MLLMTrainingParams专用参数类
+- 🔗 **多层API接口**: 专用接口(/llm, /mllm) + V2增强接口 + 向后兼容
 - 🚀 **模型部署管理**: 智能端口分配和部署生命周期管理
 - 📊 **实时监控**: 训练进度、GPU状态、系统资源监控
 - 💾 **Redis存储**: 持久化任务状态和训练数据
 - 📝 **详细日志**: 完整的训练日志和事件记录
 - 🐳 **Docker支持**: 一键部署和容器化运行
 - 🔧 **RESTful API**: 标准化的API接口设计
-- 🔀 **多任务类型**: 支持多模态、语言模型和部署任务
+- 🔄 **完全向后兼容**: 旧版API和参数格式无缝兼容
 
 ## 🏛️ 系统架构
 
@@ -84,7 +88,7 @@ swift-api/
 │   ├── setting.py           # 配置管理
 │   ├── models/              # 数据模型
 │   │   ├── __init__.py
-│   │   ├── base_trainer.py  # 训练器基类架构
+│   │   ├── base_trainer.py  # 训练器基类架构 (LLM/MLLM分离)
 │   │   ├── training_model.py # 训练任务模型
 │   │   └── deploy_model.py  # 部署任务模型
 │   ├── services/            # 业务逻辑
@@ -97,8 +101,7 @@ swift-api/
 │   │   └── redis_service.py      # Redis服务
 │   ├── api/                 # API路由
 │   │   ├── __init__.py
-│   │   ├── training.py      # 训练相关API (v1)
-│   │   ├── training_v2.py   # 训练相关API (v2)
+│   │   ├── training.py      # 统一训练API (包含v1, v2, LLM, MLLM接口)
 │   │   └── deploy.py        # 部署相关API
 │   └── utils/               # 工具函数
 │       ├── __init__.py
@@ -133,22 +136,39 @@ swift-api/
                               加入队列 → 等待GPU可用 → 自动启动
 ```
 
-## 🧩 多任务类型训练支持
+## 🧩 多训练器类型支持（LLM/MLLM分离架构）
 
-自 v2.0 起，系统支持多种训练任务类型（如多模态模型、语言模型等），通过 `task_type` 字段区分。
+自 v2.0 起，系统采用基类+继承的架构，支持LLM（大语言模型）和MLLM（多模态大语言模型）的分离训练：
 
-- `task_type`: 任务类型，当前支持 `multimodal`（多模态）、`language_model`（语言模型）和 `deploy`（模型部署），后续可扩展。
-- `train_params`: 训练参数，结构随任务类型变化，详见下方示例。
+### 🎯 核心架构特性
+- **基类分离**: `BaseTrainer` 抽象基类，`LLMTrainer` 和 `MLLMTrainer` 继承实现
+- **参数类型化**: `LLMTrainingParams` 和 `MLLMTrainingParams` 专用参数
+- **工厂模式**: `TrainerFactory` 统一创建和管理训练器实例
+- **向后兼容**: 完全兼容旧版本API和参数格式
 
-### 任务类型与参数模型
+### 📋 训练器类型对比
 
-| 任务类型         | 说明           | 参数模型（train_params）示例 |
-|------------------|----------------|-----------------------------|
-| multimodal       | 多模态模型训练 | MultiModalTrainParams       |
-| language_model   | 语言模型训练   | LanguageModelTrainParams    |
-| deploy           | 模型部署管理   | DeployParams                |
+| 训练器类型 | 说明 | 特殊参数 | 适用模型 |
+|------------|------|----------|----------|
+| **LLM** | 大语言模型训练 | `lora_rank`, `lora_alpha` | Qwen2.5-7B, ChatGLM, Llama等 |
+| **MLLM** | 多模态大语言模型训练 | `vit_lr`, `aligner_lr` + LLM参数 | Qwen2-VL, LLaVA, InternVL等 |
 
-> 若不指定 `task_type`，默认为 `multimodal`，兼容老接口。
+### 🔄 API接口层次
+
+```
+/api/v1/training/
+├── jobs/                    # 通用训练接口（向后兼容）
+├── llm/                     # LLM专用接口
+│   ├── jobs                 # 创建LLM训练任务
+│   └── params/default       # 获取LLM默认参数
+├── mllm/                    # MLLM专用接口  
+│   ├── jobs                 # 创建MLLM训练任务
+│   └── params/default       # 获取MLLM默认参数
+└── v2/                      # V2增强接口
+    ├── jobs                 # 统一V2训练接口
+    ├── supported-types      # 查询支持的训练器类型
+    └── params/compare       # 比较LLM和MLLM参数差异
+```
 
 ---
 
@@ -181,57 +201,126 @@ swift-api/
 
 ---
 
-## 📚 API文档（多任务类型示例）
+## 📚 新版API使用指南（LLM/MLLM分离）
 
-### 创建模型部署任务
+### 🚀 LLM专用训练接口
 
+#### 创建LLM训练任务
 ```bash
-curl -X POST "http://localhost:8000/api/v1/deploy/jobs" \
+curl -X POST "http://localhost:8000/api/v1/training/llm/jobs" \
   -H "Content-Type: application/json" \
   -d '{
-    "model_path": "output/multimodal_001",
-    "deploy_target": "local",
-    "deploy_type": "mllm",
-    "version": "v1.0.0",
-    "resources": {
-      "memory": "8GB",
-      "gpu_memory": "16GB"
+    "data_path": "AI-ModelScope/damo/nlp_polylm_13b_text_generation",
+    "model_path": "Qwen/Qwen2.5-7B-Instruct", 
+    "output_dir": "output/llm_fine_tuned",
+    "priority": 5,
+    "params": {
+      "num_epochs": 3,
+      "batch_size": 4,
+      "learning_rate": 5e-5,
+      "lora_rank": 64,
+      "lora_alpha": 128,
+      "max_length": 2048,
+      "warmup_ratio": 0.1
     }
   }'
 ```
 
-### 创建多模态训练任务
+#### 获取LLM默认参数
+```bash
+curl -X GET "http://localhost:8000/api/v1/training/llm/params/default"
+```
 
+### 🎨 MLLM专用训练接口  
+
+#### 创建MLLM训练任务
+```bash
+curl -X POST "http://localhost:8000/api/v1/training/mllm/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2-VL-7B-Instruct",
+    "output_dir": "output/mllm_fine_tuned", 
+    "priority": 7,
+    "params": {
+      "num_epochs": 2,
+      "batch_size": 2,
+      "learning_rate": 1e-5,
+      "vit_lr": 1e-6,
+      "aligner_lr": 1e-5,
+      "lora_rank": 32,
+      "lora_alpha": 64,
+      "max_length": 4096
+    }
+  }'
+```
+
+#### 获取MLLM默认参数
+```bash  
+curl -X GET "http://localhost:8000/api/v1/training/mllm/params/default"
+```
+
+### 🔧 V2增强接口
+
+#### 统一V2训练接口（支持新参数格式）
+```bash
+curl -X POST "http://localhost:8000/api/v1/training/v2/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_type": "mllm",
+    "data_path": "AI-ModelScope/coco#20000", 
+    "model_path": "Qwen/Qwen2-VL-7B-Instruct",
+    "output_dir": "output/v2_training",
+    "mllm_params": {
+      "num_epochs": 3,
+      "vit_lr": 1e-6,
+      "aligner_lr": 1e-5
+    }
+  }'
+```
+
+#### 查询支持的训练器类型
+```bash
+curl -X GET "http://localhost:8000/api/v1/training/v2/supported-types"
+```
+
+#### 比较LLM和MLLM参数差异
+```bash
+curl -X POST "http://localhost:8000/api/v1/training/v2/params/compare" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "llm_params": {
+      "num_epochs": 3,
+      "batch_size": 4,
+      "learning_rate": 5e-5,
+      "lora_rank": 64
+    },
+    "mllm_params": {
+      "num_epochs": 2, 
+      "batch_size": 2,
+      "learning_rate": 1e-5,
+      "vit_lr": 1e-6,
+      "aligner_lr": 1e-5,
+      "lora_rank": 32
+    }
+  }'
+```
+
+### 🔄 向后兼容接口（仍然支持）
+
+#### 通用训练接口（自动推断训练器类型）
 ```bash
 curl -X POST "http://localhost:8000/api/v1/training/jobs" \
   -H "Content-Type: application/json" \
   -d '{
-    "task_type": "multimodal",
+    "task_type": "multimodal",  # 自动映射到MLLM
     "data_path": "AI-ModelScope/coco#20000",
-    "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
-    "output_dir": "output/multimodal_001",
+    "model_path": "Qwen/Qwen2.5-VL-7B-Instruct", 
+    "output_dir": "output/backward_compatible",
     "train_params": {
       "num_epochs": 2,
       "batch_size": 8,
-      "vit_lr": 1e-5
-    }
-  }'
-```
-
-### 创建语言模型训练任务
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/training/jobs" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task_type": "language_model",
-    "data_path": "AI-ModelScope/text#10000",
-    "model_path": "Qwen/Qwen2.5-7B",
-    "output_dir": "output/lm_001",
-    "train_params": {
-      "num_epochs": 3,
-      "batch_size": 4,
-      "learning_rate": 0.0001
+      "vit_lr": 1e-5  # 自动转换为MLLMTrainingParams
     }
   }'
 ```
@@ -240,20 +329,47 @@ curl -X POST "http://localhost:8000/api/v1/training/jobs" \
 
 ## 📚 API文档
 
-### 核心端点
+### 核心训练端点
 
 | 方法 | 端点 | 描述 | 状态码 |
 |------|------|------|--------|
-| `POST` | `/api/v1/training/jobs` | 创建训练任务 | 201 |
+| `POST` | `/api/v1/training/jobs` | 创建训练任务（通用，向后兼容） | 201 |
 | `POST` | `/api/v1/training/jobs/{job_id}/start` | 启动训练任务 | 200 |
 | `POST` | `/api/v1/training/jobs/{job_id}/stop` | 停止训练任务 | 200 |
 | `POST` | `/api/v1/training/jobs/{job_id}/export` | 手动触发模型导出 | 200 |
-| `GET` | `/api/v1/training/jobs/{job_id}/status` | 获取训练状态 | 200 |
 | `GET` | `/api/v1/training/jobs/{job_id}` | 获取任务详情 | 200 |
 | `GET` | `/api/v1/training/jobs` | 获取任务列表 | 200 |
+| `GET` | `/api/v1/training/jobs/{job_id}/progress` | 获取训练进度 | 200 |
 | `DELETE` | `/api/v1/training/jobs/{job_id}` | 删除训练任务 | 204 |
 | `GET` | `/api/v1/training/jobs/{job_id}/logs` | 获取训练日志 | 200 |
 | `GET` | `/api/v1/training/jobs/{job_id}/events` | 获取训练事件 | 200 |
+
+### LLM专用端点
+
+| 方法 | 端点 | 描述 | 状态码 |
+|------|------|------|--------|
+| `POST` | `/api/v1/training/llm/jobs` | 创建LLM专用训练任务 | 201 |
+| `GET` | `/api/v1/training/llm/params/default` | 获取LLM默认参数 | 200 |
+
+### MLLM专用端点
+
+| 方法 | 端点 | 描述 | 状态码 |
+|------|------|------|--------|
+| `POST` | `/api/v1/training/mllm/jobs` | 创建MLLM专用训练任务 | 201 |
+| `GET` | `/api/v1/training/mllm/params/default` | 获取MLLM默认参数 | 200 |
+
+### V2增强端点
+
+| 方法 | 端点 | 描述 | 状态码 |
+|------|------|------|--------|
+| `POST` | `/api/v1/training/v2/jobs` | 创建训练任务V2（支持新参数格式） | 201 |
+| `GET` | `/api/v1/training/v2/supported-types` | 获取支持的训练器类型 | 200 |
+| `POST` | `/api/v1/training/v2/params/compare` | 比较LLM和MLLM参数差异 | 200 |
+
+### 系统监控端点
+
+| 方法 | 端点 | 描述 | 状态码 |
+|------|------|------|--------|
 | `GET` | `/api/v1/training/gpus` | 获取GPU信息 | 200 |
 | `GET` | `/api/v1/training/system/status` | 获取系统状态 | 200 |
 | `GET` | `/api/v1/training/health` | 健康检查 | 200 |
@@ -282,41 +398,26 @@ curl -X POST "http://localhost:8000/api/v1/training/jobs" \
 | `POST` | `/api/v1/training/queue/processor/stop` | 停止队列处理器 | 200 |
 | `GET` | `/api/v1/training/queue/processor/status` | 获取处理器状态 | 200 |
 
-## ⚙️ 训练参数说明（新版）
+## ⚙️ 训练参数说明（基类分离架构）
 
-- 训练参数通过 `train_params` 字段传递，结构随 `task_type` 变化。
-- 典型参数如下：
+### 🎯 参数架构概述
 
-### MultiModalTrainParams
-```json
-{
-  "num_epochs": 1,
-  "batch_size": 1,
-  "learning_rate": 0.0001,
-  "vit_lr": 0.00001,
-  "aligner_lr": 0.00001,
-  "lora_rank": 16,
-  "lora_alpha": 32,
-  "gradient_accumulation_steps": 4,
-  "eval_steps": 100,
-  "save_steps": 100,
-  "save_total_limit": 2,
-  "logging_steps": 5,
-  "max_length": 8192,
-  "warmup_ratio": 0.05,
-  "dataloader_num_workers": 4,
-  "dataset_num_proc": 4,
-  "save_only_model": true,
-  "train_type": "lora",
-  "torch_dtype": "bfloat16"
-}
+系统采用基类+继承的参数架构，所有训练参数继承自 `BaseTrainingParams`：
+
+```
+BaseTrainingParams (基类)
+├── LLMTrainingParams (LLM专用参数)
+└── MLLMTrainingParams (MLLM专用参数)
 ```
 
-### LanguageModelTrainParams
+### 📋 通用基础参数 (BaseTrainingParams)
+
+所有训练器共享的基础参数：
+
 ```json
 {
   "num_epochs": 1,
-  "batch_size": 1,
+  "batch_size": 1, 
   "learning_rate": 0.0001,
   "gradient_accumulation_steps": 4,
   "eval_steps": 100,
@@ -328,12 +429,90 @@ curl -X POST "http://localhost:8000/api/v1/training/jobs" \
   "dataloader_num_workers": 4,
   "dataset_num_proc": 4,
   "save_only_model": true,
-  "train_type": "standard",
   "torch_dtype": "bfloat16"
 }
 ```
 
-> 你可以根据实际需求，仅传递需要覆盖的参数，未传递的参数将使用默认值。
+### 🚀 LLM专用参数 (LLMTrainingParams)
+
+继承基础参数 + LLM特有参数：
+
+```json
+{
+  // ... 基础参数 ...
+  "train_type": "lora",
+  "lora_rank": 16,
+  "lora_alpha": 32
+}
+```
+
+**LLM特有参数说明:**
+- `train_type`: 训练类型 (默认: "lora")
+- `lora_rank`: LoRA矩阵的秩 (默认: 16)
+- `lora_alpha`: LoRA的缩放参数 (默认: 32)
+
+### 🎨 MLLM专用参数 (MLLMTrainingParams)
+
+继承基础参数 + LLM参数 + MLLM特有参数：
+
+```json
+{
+  // ... 基础参数 + LLM参数 ...
+  "train_type": "lora",
+  "vit_lr": 0.000001,
+  "aligner_lr": 0.00001,
+  "lora_rank": 16,
+  "lora_alpha": 32
+}
+```
+
+**MLLM特有参数说明:**
+- `vit_lr`: 视觉编码器(ViT)学习率 (默认: 1e-5)
+- `aligner_lr`: 模态对齐器学习率 (默认: 1e-5)
+- 同时包含所有LLM参数
+
+### 🔧 参数使用方式
+
+#### 方式1: 专用接口（推荐）
+```bash
+# LLM专用接口
+curl -X POST "/api/v1/training/llm/jobs" \
+  -d '{"params": {"lora_rank": 64, "lora_alpha": 128}}'
+
+# MLLM专用接口  
+curl -X POST "/api/v1/training/mllm/jobs" \
+  -d '{"params": {"vit_lr": 1e-6, "aligner_lr": 1e-5}}'
+```
+
+#### 方式2: V2统一接口
+```bash
+curl -X POST "/api/v1/training/v2/jobs" \
+  -d '{
+    "task_type": "llm",
+    "llm_params": {"lora_rank": 64},
+    "mllm_params": {"vit_lr": 1e-6}
+  }'
+```
+
+#### 方式3: 向后兼容接口
+```bash
+curl -X POST "/api/v1/training/jobs" \
+  -d '{
+    "task_type": "multimodal",
+    "train_params": {"vit_lr": 1e-5}  # 自动转换为MLLMTrainingParams
+  }'
+```
+
+### 💡 参数优化建议
+
+| 训练类型 | 推荐配置 | 适用场景 |
+|----------|----------|----------|
+| **LLM微调** | `lora_rank=16-64`, `learning_rate=5e-5` | 文本生成、对话 |
+| **MLLM微调** | `vit_lr=1e-6`, `aligner_lr=1e-5`, `learning_rate=1e-5` | 图文理解、VQA |
+| **大模型** | `batch_size=1-2`, `gradient_accumulation_steps=8-16` | 显存优化 |
+| **快速实验** | `num_epochs=1`, `save_steps=50` | 验证效果 |
+
+> 💡 **提示**: 只需传递要覆盖的参数，未传递的参数将使用类型对应的默认值。
 
 ## ⚙️ 配置说明
 
@@ -501,32 +680,150 @@ curl -X POST "http://localhost:8000/api/v1/training/jobs" \
   }'
 ```
 
-### 多任务类型创建示例
+### 🔥 新版分离架构训练示例
 
+#### LLM专用训练（推荐方式）
 ```bash
-# 创建多模态训练任务
+# 使用LLM专用接口 - 简洁明确
+curl -X POST "http://localhost:8000/api/v1/training/llm/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data_path": "AI-ModelScope/damo/nlp_polylm_13b_text_generation",
+    "model_path": "Qwen/Qwen2.5-7B-Instruct",
+    "output_dir": "output/llm_fine_tuned",
+    "priority": 5,
+    "params": {
+      "num_epochs": 3,
+      "batch_size": 4,
+      "learning_rate": 5e-5,
+      "lora_rank": 64,
+      "lora_alpha": 128
+    }
+  }'
+```
+
+#### MLLM专用训练（推荐方式）
+```bash
+# 使用MLLM专用接口 - 支持多模态特有参数
+curl -X POST "http://localhost:8000/api/v1/training/mllm/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2-VL-7B-Instruct",
+    "output_dir": "output/mllm_fine_tuned",
+    "priority": 7,
+    "params": {
+      "num_epochs": 2,
+      "batch_size": 2,
+      "learning_rate": 1e-5,
+      "vit_lr": 1e-6,
+      "aligner_lr": 1e-5,
+      "lora_rank": 32,
+      "lora_alpha": 64
+    }
+  }'
+```
+
+#### V2统一接口训练
+```bash
+# 使用V2接口 - 支持混合参数格式
+curl -X POST "http://localhost:8000/api/v1/training/v2/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_type": "mllm",
+    "data_path": "AI-ModelScope/coco#20000",
+    "model_path": "Qwen/Qwen2-VL-7B-Instruct",
+    "output_dir": "output/v2_training",
+    "priority": 6,
+    "mllm_params": {
+      "num_epochs": 3,
+      "vit_lr": 1e-6,
+      "aligner_lr": 1e-5
+    }
+  }'
+```
+
+### 📊 训练器类型探索
+
+#### 查询支持的训练器类型
+```bash
+curl -X GET "http://localhost:8000/api/v1/training/v2/supported-types"
+```
+
+**响应示例:**
+```json
+{
+  "supported_types": [
+    {
+      "type": "llm",
+      "task_types": ["llm", "language_model"],
+      "params_model": "LLMTrainingParams",
+      "description": "大语言模型训练"
+    },
+    {
+      "type": "mllm", 
+      "task_types": ["mllm", "multimodal"],
+      "params_model": "MLLMTrainingParams",
+      "description": "多模态大语言模型训练"
+    }
+  ],
+  "backward_compatibility": {
+    "language_model": "自动转换为LLM类型",
+    "multimodal": "自动转换为MLLM类型"
+  }
+}
+```
+
+#### 比较LLM和MLLM参数差异
+```bash
+curl -X POST "http://localhost:8000/api/v1/training/v2/params/compare" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "llm_params": {
+      "num_epochs": 3,
+      "learning_rate": 5e-5,
+      "lora_rank": 64
+    },
+    "mllm_params": {
+      "num_epochs": 2,
+      "learning_rate": 1e-5,
+      "vit_lr": 1e-6,
+      "aligner_lr": 1e-5,
+      "lora_rank": 32
+    }
+  }'
+```
+
+### 🔄 向后兼容训练示例
+
+#### 旧版多模态训练（仍然支持）
+```bash
+# 自动转换为MLLM训练器
 curl -X POST "http://localhost:8000/api/v1/training/jobs" \
   -H "Content-Type: application/json" \
   -d '{
     "task_type": "multimodal",
     "data_path": "AI-ModelScope/coco#20000",
     "model_path": "Qwen/Qwen2.5-VL-7B-Instruct",
-    "output_dir": "output/multimodal_001",
+    "output_dir": "output/backward_compatible",
     "train_params": {
       "num_epochs": 2,
       "batch_size": 8,
       "vit_lr": 1e-5
     }
   }'
+```
 
-# 创建语言模型训练任务
+#### 旧版语言模型训练（仍然支持）
+```bash
+# 自动转换为LLM训练器
 curl -X POST "http://localhost:8000/api/v1/training/jobs" \
   -H "Content-Type: application/json" \
   -d '{
     "task_type": "language_model",
-    "data_path": "AI-ModelScope/text#10000",
+    "data_path": "AI-ModelScope/text#10000", 
     "model_path": "Qwen/Qwen2.5-7B",
-    "output_dir": "output/lm_001",
+    "output_dir": "output/lm_backward_compatible",
     "train_params": {
       "num_epochs": 3,
       "batch_size": 4,
