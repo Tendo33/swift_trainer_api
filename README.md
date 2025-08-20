@@ -1,6 +1,6 @@
 # Swift Trainer API 🚀
 
-基于 FastAPI 的 Swift 训练任务管理 API 系统，支持多 GPU 训练、Redis 状态管理、GPU自动排队功能和详细日志记录。
+基于 FastAPI 的 Swift 训练任务管理 API 系统，支持多 GPU 训练、Redis 状态管理、GPU自动排队功能、模型部署管理和详细日志记录。
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
@@ -9,6 +9,23 @@
 [![Docker](https://img.shields.io/badge/Docker-supported-blue.svg)](https://www.docker.com/)
 [![CUDA](https://img.shields.io/badge/CUDA-12.x-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+## 📋 目录
+
+- [✨ 主要特性](#-主要特性)
+- [🏛️ 系统架构](#-系统架构)
+- [🏗️ 项目结构](#-项目结构)
+- [🎯 GPU排队功能](#-gpu排队功能)
+- [🧩 多任务类型训练支持](#-多任务类型训练支持)
+- [🚀 模型部署功能](#-模型部署功能)
+- [⚡ 快速开始](#-快速开始)
+- [💡 使用示例](#-使用示例)
+- [📚 API文档](#-api文档)
+- [⚙️ 配置说明](#-配置说明)
+- [🎯 优先级使用指南](#-优先级使用指南)
+- [🔧 开发指南](#-开发指南)
+- [🔍 故障排除](#-故障排除)
+- [📊 监控和日志](#-监控和日志)
 
 ## ✨ 主要特性
 
@@ -871,3 +888,77 @@ tail -f logs/system.log
 # 查看错误日志
 grep "ERROR" logs/system.log
 ```
+
+## 🤝 贡献指南
+
+我们欢迎社区贡献！请遵循以下步骤：
+
+### 开发流程
+
+1. **Fork 项目**
+```bash
+git clone https://github.com/your-username/swift_trainer_api.git
+cd swift_trainer_api
+```
+
+2. **创建功能分支**
+```bash
+git checkout -b feature/your-feature-name
+```
+
+3. **开发和测试**
+```bash
+# 安装开发依赖
+pip install -r requirements.txt
+sh install_all.sh
+
+# 运行测试
+python test_integration.py
+python test_refactor.py
+
+# 代码格式化
+black application/
+isort application/
+```
+
+4. **提交更改**
+```bash
+git add .
+git commit -m "feat: add your feature description"
+git push origin feature/your-feature-name
+```
+
+5. **创建 Pull Request**
+
+### 代码规范
+
+- 使用 [Black](https://black.readthedocs.io/) 进行代码格式化
+- 使用 [isort](https://pycqa.github.io/isort/) 整理导入
+- 遵循 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 编码规范
+- 为新功能添加相应的测试
+- 更新相关文档
+
+### 报告问题
+
+如果发现 bug 或有功能建议，请在 [GitHub Issues](https://github.com/Tendo33/swift_trainer_api/issues) 中创建新的 issue。
+
+## 📄 许可证
+
+本项目基于 [MIT License](LICENSE) 开源协议。
+
+## 🙏 致谢
+
+- [ModelScope Swift](https://github.com/modelscope/swift) - 核心训练框架
+- [FastAPI](https://fastapi.tiangolo.com/) - Web 框架
+- [Redis](https://redis.io/) - 数据存储和队列管理
+- [NVIDIA](https://developer.nvidia.com/) - GPU 计算支持
+
+## 📞 联系方式
+
+- 项目仓库: [https://github.com/Tendo33/swift_trainer_api](https://github.com/Tendo33/swift_trainer_api)
+- 问题反馈: [GitHub Issues](https://github.com/Tendo33/swift_trainer_api/issues)
+- 文档: [API Documentation](http://localhost:8000/docs)
+
+---
+
+⭐ 如果这个项目对您有帮助，请给我们一个 Star！
