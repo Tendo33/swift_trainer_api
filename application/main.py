@@ -159,13 +159,12 @@ async def api_info() -> dict:
         ],
         "endpoints": {
             "training": f"{settings.API_PREFIX}/training",
-            "training_v2": f"{settings.API_PREFIX}/training/v2",
-            "training_llm": f"{settings.API_PREFIX}/training/llm",
-            "training_mllm": f"{settings.API_PREFIX}/training/mllm",
             "health": f"{settings.API_PREFIX}/training/health",
             "gpu_info": f"{settings.API_PREFIX}/training/gpus",
             "system_status": f"{settings.API_PREFIX}/training/system/status",
             "queue": f"{settings.API_PREFIX}/training/queue",
+            "supported_types": f"{settings.API_PREFIX}/training/supported-types",
+            "default_params": f"{settings.API_PREFIX}/training/params/default",
         },
         "config": {
             "redis_host": settings.REDIS_HOST,

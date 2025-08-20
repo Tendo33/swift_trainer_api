@@ -27,19 +27,13 @@ from application.utils.logger import get_system_logger
 
 logger = get_system_logger()
 
-# 创建不同的路由器，按功能分类
-training_job_router = APIRouter(prefix="/training", tags=["训练任务管理"])
-llm_router = APIRouter(prefix="/training/llm", tags=["LLM训练"])
-mllm_router = APIRouter(prefix="/training/mllm", tags=["MLLM训练"])
-v2_router = APIRouter(prefix="/training/v2", tags=["训练V2接口"])
-gpu_resource_router = APIRouter(prefix="/training", tags=["GPU资源管理"])
-gpu_queue_router = APIRouter(prefix="/training", tags=["GPU队列管理"])
-system_monitor_router = APIRouter(prefix="/training", tags=["系统监控"])
+# 创建统一的路由器
+router = APIRouter(prefix="/training", tags=["训练任务管理"])
 
 # ==================== 训练任务管理接口 ====================
 
 
-@training_job_router.post("/jobs", summary="创建训练任务")
+@router.post("/jobs", summary="创建训练任务")
 async def create_training_job(request: TrainingJobCreateRequest):
     """创建新的Swift训练任务"""
     try:
@@ -88,7 +82,7 @@ async def create_training_job(request: TrainingJobCreateRequest):
         raise HTTPException(status_code=500, detail="创建训练任务失败，请检查日志")
 
 
-@training_job_router.post(
+@router.post(
     "/jobs/{job_id}/start", response_model=TrainingJobResponse, summary="启动训练任务"
 )
 async def start_training_job(job_id: str):
@@ -112,7 +106,7 @@ async def start_training_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"启动训练任务失败: {str(e)}")
 
 
-@training_job_router.post(
+@router.post(
     "/jobs/{job_id}/stop", response_model=TrainingJobResponse, summary="停止训练任务"
 )
 async def stop_training_job(job_id: str):
@@ -136,7 +130,7 @@ async def stop_training_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"停止训练任务失败: {str(e)}")
 
 
-@training_job_router.get(
+@router.get(
     "/jobs", response_model=TrainingJobListResponse, summary="获取训练任务列表"
 )
 async def get_training_jobs(
@@ -177,7 +171,7 @@ async def get_training_jobs(
         raise HTTPException(status_code=500, detail=f"获取训练任务列表失败: {str(e)}")
 
 
-@training_job_router.get(
+@router.get(
     "/jobs/{job_id}", response_model=TrainingJob, summary="获取训练任务详情"
 )
 async def get_training_job(job_id: str):
@@ -197,7 +191,7 @@ async def get_training_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"获取训练任务详情失败: {str(e)}")
 
 
-@training_job_router.get(
+@router.get(
     "/jobs/{job_id}/progress",
     response_model=TrainingProgressResponse,
     summary="获取训练进度",
@@ -231,7 +225,7 @@ async def get_training_progress(job_id: str):
         raise HTTPException(status_code=500, detail=f"获取训练进度失败: {str(e)}")
 
 
-@training_job_router.get("/jobs/{job_id}/logs", summary="获取训练日志")
+@router.get("/jobs/{job_id}/logs", summary="获取训练日志")
 async def get_training_logs(
     job_id: str, limit: int = Query(100, ge=1, le=1000, description="日志条数限制")
 ):
@@ -254,7 +248,7 @@ async def get_training_logs(
         raise HTTPException(status_code=500, detail=f"获取训练日志失败: {str(e)}")
 
 
-@training_job_router.get("/jobs/{job_id}/events", summary="获取训练事件")
+@router.get("/jobs/{job_id}/events", summary="获取训练事件")
 async def get_training_events(
     job_id: str, limit: int = Query(50, ge=1, le=500, description="事件条数限制")
 ):
@@ -277,7 +271,7 @@ async def get_training_events(
         raise HTTPException(status_code=500, detail=f"获取训练事件失败: {str(e)}")
 
 
-@training_job_router.delete(
+@router.delete(
     "/jobs/{job_id}", response_model=TrainingJobResponse, summary="删除训练任务"
 )
 async def delete_training_job(job_id: str):
@@ -312,7 +306,7 @@ async def delete_training_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"删除训练任务失败: {str(e)}")
 
 
-@training_job_router.delete(
+@router.delete(
     "/jobs", response_model=DeleteAllJobsResponse, summary="删除所有训练任务"
 )
 async def delete_all_training_jobs():
@@ -347,7 +341,7 @@ async def delete_all_training_jobs():
         raise HTTPException(status_code=500, detail=f"删除所有训练任务失败: {str(e)}")
 
 
-@training_job_router.post(
+@router.post(
     "/jobs/{job_id}/export",
     response_model=TrainingJobResponse,
     summary="手动触发模型导出",
@@ -373,144 +367,51 @@ async def export_training_model(job_id: str):
         raise HTTPException(status_code=500, detail=f"导出模型失败: {str(e)}")
 
 
-# ==================== LLM专用训练接口 ====================
+# ==================== 参数查询接口 ====================
 
 
-@llm_router.post("/jobs", summary="创建LLM训练任务")
-async def create_llm_training_job(
-    data_path: str,
-    model_path: str,
-    output_dir: str,
-    params: Optional[LLMTrainingParams] = None,
-    priority: int = 0,
-):
-    """创建LLM专用训练任务"""
+@router.get("/params/default", summary="获取默认训练参数")
+async def get_default_training_params(trainer_type: Optional[str] = Query(None, description="训练器类型: llm 或 mllm")):
+    """获取默认训练参数"""
     try:
-        request = TrainingJobCreateRequest(
-            task_type=TrainingTaskType.LLM,
-            data_path=data_path,
-            model_path=model_path,
-            output_dir=output_dir,
-            priority=priority,
-            llm_params=params or LLMTrainingParams(),
-        )
-
-        training_service = get_training_service()
-        job = training_service.create_training_job(request)
-
-        logger.info(f"创建LLM训练任务成功: {job.id}")
-
-        return TrainingJobResponse(
-            job_id=job.id, status=job.status, message="LLM训练任务创建成功"
-        )
-
-    except ValueError as e:
-        logger.warning(f"创建LLM训练任务参数错误: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        if trainer_type == "llm":
+            default_params = LLMTrainingParams()
+            return {
+                "trainer_type": TrainerType.LLM,
+                "default_params": default_params.model_dump(),
+                "description": "LLM训练默认参数配置",
+            }
+        elif trainer_type == "mllm":
+            default_params = MLLMTrainingParams()
+            return {
+                "trainer_type": TrainerType.MLLM,
+                "default_params": default_params.model_dump(),
+                "description": "MLLM训练默认参数配置",
+            }
+        else:
+            # 返回两种类型的默认参数
+            llm_params = LLMTrainingParams()
+            mllm_params = MLLMTrainingParams()
+            return {
+                "available_types": [
+                    {
+                        "type": TrainerType.LLM,
+                        "default_params": llm_params.model_dump(),
+                        "description": "LLM训练默认参数配置",
+                    },
+                    {
+                        "type": TrainerType.MLLM,
+                        "default_params": mllm_params.model_dump(),
+                        "description": "MLLM训练默认参数配置",
+                    }
+                ]
+            }
     except Exception as e:
-        logger.error(f"创建LLM训练任务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建LLM训练任务失败: {str(e)}")
-
-
-@llm_router.get("/params/default", summary="获取LLM默认参数")
-async def get_llm_default_params():
-    """获取LLM训练的默认参数"""
-    try:
-        default_params = LLMTrainingParams()
-        return {
-            "trainer_type": TrainerType.LLM,
-            "default_params": default_params.model_dump(),
-            "description": "LLM训练默认参数配置",
-        }
-    except Exception as e:
-        logger.error(f"获取LLM默认参数失败: {str(e)}")
+        logger.error(f"获取默认参数失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取默认参数失败: {str(e)}")
 
 
-# ==================== MLLM专用训练接口 ====================
-
-
-@mllm_router.post("/jobs", summary="创建MLLM训练任务")
-async def create_mllm_training_job(
-    data_path: str,
-    model_path: str,
-    output_dir: str,
-    params: Optional[MLLMTrainingParams] = None,
-    priority: int = 0,
-):
-    """创建MLLM专用训练任务"""
-    try:
-        request = TrainingJobCreateRequest(
-            task_type=TrainingTaskType.MLLM,
-            data_path=data_path,
-            model_path=model_path,
-            output_dir=output_dir,
-            priority=priority,
-            mllm_params=params or MLLMTrainingParams(),
-        )
-
-        training_service = get_training_service()
-        job = training_service.create_training_job(request)
-
-        logger.info(f"创建MLLM训练任务成功: {job.id}")
-
-        return TrainingJobResponse(
-            job_id=job.id, status=job.status, message="MLLM训练任务创建成功"
-        )
-
-    except ValueError as e:
-        logger.warning(f"创建MLLM训练任务参数错误: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"创建MLLM训练任务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建MLLM训练任务失败: {str(e)}")
-
-
-@mllm_router.get("/params/default", summary="获取MLLM默认参数")
-async def get_mllm_default_params():
-    """获取MLLM训练的默认参数"""
-    try:
-        default_params = MLLMTrainingParams()
-        return {
-            "trainer_type": TrainerType.MLLM,
-            "default_params": default_params.model_dump(),
-            "description": "MLLM训练默认参数配置",
-        }
-    except Exception as e:
-        logger.error(f"获取MLLM默认参数失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取默认参数失败: {str(e)}")
-
-
-# ==================== V2通用接口 ====================
-
-
-@v2_router.post("/jobs", summary="创建训练任务V2")
-async def create_training_job_v2(request: TrainingJobCreateRequest):
-    """
-    创建训练任务V2版本
-    支持新的参数格式和训练器类型
-    """
-    try:
-        training_service = get_training_service()
-        job = training_service.create_training_job(request)
-
-        logger.info(f"创建训练任务V2成功: {job.id}, 类型: {job.trainer_type}")
-
-        return TrainingJobResponse(
-            job_id=job.id,
-            status=job.status,
-            message=f"训练任务创建成功，训练器类型: {job.trainer_type}",
-        )
-
-    except ValueError as e:
-        logger.warning(f"创建训练任务V2参数错误: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"创建训练任务V2失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建训练任务失败: {str(e)}")
-
-
-@v2_router.get("/supported-types", summary="获取支持的训练器类型")
+@router.get("/supported-types", summary="获取支持的训练器类型")
 async def get_supported_trainer_types():
     """获取支持的训练器类型和对应的参数模型"""
     try:
@@ -542,54 +443,10 @@ async def get_supported_trainer_types():
         raise HTTPException(status_code=500, detail=f"获取训练器类型失败: {str(e)}")
 
 
-@v2_router.post("/params/compare", summary="比较训练参数")
-async def compare_training_params(
-    llm_params: LLMTrainingParams, mllm_params: MLLMTrainingParams
-):
-    """比较LLM和MLLM训练参数的差异"""
-    try:
-        llm_dict = llm_params.model_dump()
-        mllm_dict = mllm_params.model_dump()
-
-        # 找出通用参数
-        common_params = {}
-        llm_specific = {}
-        mllm_specific = {}
-
-        all_keys = set(llm_dict.keys()) | set(mllm_dict.keys())
-
-        for key in all_keys:
-            if key in llm_dict and key in mllm_dict:
-                common_params[key] = {
-                    "llm_value": llm_dict[key],
-                    "mllm_value": mllm_dict[key],
-                    "same": llm_dict[key] == mllm_dict[key],
-                }
-            elif key in llm_dict:
-                llm_specific[key] = llm_dict[key]
-            else:
-                mllm_specific[key] = mllm_dict[key]
-
-        return {
-            "common_params": common_params,
-            "llm_specific_params": llm_specific,
-            "mllm_specific_params": mllm_specific,
-            "summary": {
-                "total_common": len(common_params),
-                "llm_specific_count": len(llm_specific),
-                "mllm_specific_count": len(mllm_specific),
-            },
-        }
-
-    except Exception as e:
-        logger.error(f"比较训练参数失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"参数比较失败: {str(e)}")
-
-
 # ==================== GPU资源管理接口 ====================
 
 
-@gpu_resource_router.get("/gpus", summary="获取GPU信息")
+@router.get("/gpus", summary="获取GPU信息")
 async def get_gpu_info():
     """获取所有GPU的信息和状态"""
     try:
@@ -627,7 +484,7 @@ async def get_gpu_info():
         raise HTTPException(status_code=500, detail=f"获取GPU信息失败: {str(e)}")
 
 
-@gpu_resource_router.get("/system/status", summary="获取系统状态")
+@router.get("/system/status", summary="获取系统状态")
 async def get_system_status():
     """获取系统资源状态"""
     try:
@@ -678,7 +535,7 @@ async def get_system_status():
 # ==================== GPU队列管理接口 ====================
 
 
-@gpu_queue_router.get(
+@router.get(
     "/queue", response_model=GPUQueueStatusResponse, summary="获取GPU队列状态"
 )
 async def get_gpu_queue_status():
@@ -693,7 +550,7 @@ async def get_gpu_queue_status():
         raise HTTPException(status_code=500, detail=f"获取GPU队列状态失败: {str(e)}")
 
 
-@gpu_queue_router.post("/queue/process", summary="处理GPU队列")
+@router.post("/queue/process", summary="处理GPU队列")
 async def process_gpu_queue():
     """手动触发处理GPU队列，尝试启动队列中的任务"""
     try:
@@ -709,7 +566,7 @@ async def process_gpu_queue():
         raise HTTPException(status_code=500, detail=f"处理GPU队列失败: {str(e)}")
 
 
-@gpu_queue_router.delete("/queue/{job_id}", summary="从队列中移除任务")
+@router.delete("/queue/{job_id}", summary="从队列中移除任务")
 async def remove_job_from_queue(job_id: str):
     """从GPU队列中移除指定的任务"""
     try:
@@ -728,7 +585,7 @@ async def remove_job_from_queue(job_id: str):
         raise HTTPException(status_code=500, detail=f"从队列移除任务失败: {str(e)}")
 
 
-@gpu_queue_router.get("/queue/{job_id}/status", summary="获取任务队列状态")
+@router.get("/queue/{job_id}/status", summary="获取任务队列状态")
 async def get_job_queue_status(job_id: str):
     """获取指定任务在队列中的状态"""
     try:
@@ -763,7 +620,7 @@ async def get_job_queue_status(job_id: str):
 # ==================== 系统监控接口 ====================
 
 
-@system_monitor_router.get("/health", summary="健康检查")
+@router.get("/health", summary="健康检查")
 async def health_check():
     """API健康检查"""
     try:
@@ -791,12 +648,4 @@ async def health_check():
         )
 
 
-# 创建主路由器，包含所有子路由器
-router = APIRouter()
-router.include_router(training_job_router)
-router.include_router(llm_router)
-router.include_router(mllm_router)
-router.include_router(v2_router)
-router.include_router(gpu_resource_router)
-router.include_router(gpu_queue_router)
-router.include_router(system_monitor_router)
+# 注意：统一的router已在文件开头定义，所有接口都使用同一个router
